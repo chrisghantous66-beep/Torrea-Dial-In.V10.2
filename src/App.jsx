@@ -54,11 +54,11 @@ const GRINDERS = {
   comandante_c40_red:  { label:'C40 MK4 (Red Clix)',      brand:'Comandante', clicks:80, unit:'clic', minµm:0,   maxµm:1200, espresso:[14,30], filter:[36,56], aeropress:[30,50], chemex:[50,64], moka:[28,44], description:'Red Clix ~15µm/clic · résolution doublée' },
   comandante_c60:      { label:'C60 Baracuda',            brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, espresso:[6,13],  filter:[16,26], aeropress:[13,23], chemex:[23,30], moka:[12,20], description:'60mm burrs · plus rapide que C40' },
 
-  // ── 1Zpresso ── (sources : 1zpresso.coffee, honestcoffeeguide ; total = rotations × clics/rotation)
-  zpresso_jmax:    { label:'J-Max',    brand:'1Zpresso', clicks:405, unit:'clic', minµm:25,  maxµm:1190, espresso:[70,150],  filter:[160,280], aeropress:[130,270], chemex:[210,320], moka:[150,260], description:'90 clics/rotation · 4,5 rot · 8,8µm/clic · précision espresso' },
-  zpresso_jxpro:   { label:'JX-Pro',   brand:'1Zpresso', clicks:200, unit:'clic', minµm:50,  maxµm:1300, espresso:[40,80],   filter:[100,160], aeropress:[80,140],  chemex:[140,180], moka:[80,120],  description:'40 clics/rotation · 5 rot · 12,5µm/clic · polyvalent filter' },
-  zpresso_kmax:    { label:'K-Max',    brand:'1Zpresso', clicks:200, unit:'clic', minµm:50,  maxµm:1300, espresso:[40,80],   filter:[100,160], aeropress:[80,140],  chemex:[140,180], moka:[80,120],  description:'40 clics/rotation · burrs 48mm · proche du JX-Pro' },
-  zpresso_zp6:     { label:'ZP6',      brand:'1Zpresso', clicks:240, unit:'clic', minµm:100, maxµm:1100, espresso:[10,55],   filter:[80,160],  aeropress:[60,140],  chemex:[140,200], moka:[35,80],   description:'240 clics/rotation · burrs ZP6 brewing-spec · ultra fin' },
+  // ── 1Zpresso ── (specs officielles 1zpresso.coffee/grind-setting · réglage en rotations)
+  zpresso_jmax:    { label:'J-Max S',     brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:25,  maxµm:1190, espresso:[0.8,1.7], filter:[1.8,3.3], aeropress:[1.5,3.0], chemex:[2.4,3.5], moka:[1.6,2.9], description:'External · 9 num/rot · 90 clics/rot · 8,8µm/clic · 4,5 rot max' },
+  zpresso_jxpro:   { label:'JX-Pro S',    brand:'1Zpresso', clicks:4.8, unit:'rot', minµm:50,  maxµm:1300, espresso:[0.8,1.5], filter:[2.5,3.6], aeropress:[1.8,3.2], chemex:[3.0,3.8], moka:[1.5,2.5], description:'Top · 10 num/rot · 40 clics/rot · 12,5µm/clic · 4,8 rot max' },
+  zpresso_kmax:    { label:'K-Max',       brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:50,  maxµm:1500, espresso:[0.5,1.2], filter:[1.5,2.5], aeropress:[1.0,2.0], chemex:[2.0,2.8], moka:[0.8,1.5], description:'External · 9 num/rot · 90 clics/rot · 22µm/clic · K-series filter-friendly' },
+  zpresso_zp6:     { label:'ZP6 Special', brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:50,  maxµm:1500, espresso:[0.5,1.2], filter:[1.5,2.5], aeropress:[1.0,2.0], chemex:[2.0,2.8], moka:[0.8,1.5], description:'External · 9 num/rot · 90 clics/rot · 22µm/clic · burrs brewing-spec' },
 
   // ── Timemore ──
   timemore_c2:     { label:'C2',       brand:'Timemore', clicks:20, unit:'clic', minµm:250, maxµm:1000, espresso:[8,15],  filter:[14,22], aeropress:[10,18], chemex:[16,24], moka:[9,14],  description:'20 clics/tour · rapport qualité/prix' },
@@ -142,7 +142,9 @@ function formatTime(s) {
 function µmToSetting(µm, g) {
   if (!g || g.label === '— Sélectionner un moulin —' || !g.clicks || !g.minµm) return null
   const pct = (µm - g.minµm) / (g.maxµm - g.minµm)
-  return Math.max(1, Math.round(pct * g.clicks))
+  const raw = pct * g.clicks
+  if (g.unit === 'rot') return Math.max(0.1, Math.round(raw * 10) / 10)
+  return Math.max(1, Math.round(raw))
 }
 
 // ─── ALGORITHMES ──────────────────────────────────────────────────────────────
@@ -2127,7 +2129,8 @@ function RecipeCard({recipe,T,grinder}){
     const µm=recipe.grindµm
     if(µm>=grinder.minµm&&µm<=grinder.maxµm){
       if(grinder.clicks){
-        const clics=Math.round((µm-grinder.minµm)/(grinder.maxµm-grinder.minµm)*grinder.clicks)
+        const raw=(µm-grinder.minµm)/(grinder.maxµm-grinder.minµm)*grinder.clicks
+        const clics=grinder.unit==='rot'?Math.round(raw*10)/10:Math.round(raw)
         convertedGrind=`${µm} µm · ${clics} ${grinder.unit}`
       } else {
         convertedGrind=`${µm} µm`
