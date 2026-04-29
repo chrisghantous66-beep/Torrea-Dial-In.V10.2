@@ -1352,11 +1352,12 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
   </>)
 }
 
-// ─── EASTER EGG : COFFEE INVADERS ─────────────────────────────────────────────
+// ─── EASTER EGG : COFFEE INVADERS (∞ progressive) ────────────────────────────
 function CoffeeInvaders({ onClose }) {
   const canvasRef = useRef(null)
   const [status, setStatus] = useState('playing')
   const [finalScore, setFinalScore] = useState(0)
+  const [finalWave, setFinalWave] = useState(1)
   const [gameKey, setGameKey] = useState(0)
   const touchRef = useRef({ left:false, right:false, fire:false })
 
@@ -1367,20 +1368,120 @@ function CoffeeInvaders({ onClose }) {
     const ctx = canvas.getContext('2d')
     const W = canvas.width, H = canvas.height
 
-    const player = { x: W/2 - 18, y: H - 44, w: 36, h: 26, speed: 3.2 }
+    const player = { x: W/2 - 18, y: H - 44, w: 36, h: 26, speed: 3.4, shield: 0 }
     let bullets = []
     let enemyBullets = []
-    const enemies = []
-    const ROWS = 4, COLS = 6
-    const eW = 28, eH = 22, gap = 8
-    const fieldW = COLS*(eW+gap) - gap
-    const startX = (W - fieldW)/2
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
-      enemies.push({ x: startX+c*(eW+gap), y: 44+r*(eH+gap), w:eW, h:eH, alive:true, row:r })
+    let enemies = []
+    let particles = []
+    let powerups = []
+    let floatingTexts = []
+
+    let wave = 0
+    let score = 0
+    let combo = 0
+    let comboTimer = 0
+    let dirX = 1
+    let frame = 0
+    let lastShot = -100
+    let lastEnemyShot = 0
+    let alive = true
+    let waveTransitionTimer = 0
+    let waveAnnounceText = ''
+    let waveAnnounceTimer = 0
+    const pu = { double:0, triple:0, rapid:0, x2:0 }
+
+    const rand = (a,b) => a + Math.random()*(b-a)
+
+    const pickType = (w, row) => {
+      const r = Math.random()
+      if(w >= 10 && row === 0 && r < 0.35) return 'tank'
+      if(w >= 7 && r < 0.30) return 'zigzag'
+      if(w >= 4 && r < 0.25) return 'fast'
+      return 'basic'
     }
 
-    let dirX = 1, frame = 0, lastShot = -100, lastEnemyShot = 0, score = 0
-    let alive = true
+    const startNextWave = () => {
+      wave++
+      enemies = []
+      enemyBullets = []
+      bullets = []
+      dirX = 1
+      const isBoss = wave % 5 === 0
+      if(isBoss) {
+        const hp = 12 + wave*3
+        enemies.push({
+          x: W/2 - 55, y: 50, w: 110, h: 50, alive: true,
+          type: 'boss', hp, maxHp: hp,
+          vx: 1.4 + wave*0.06, lastShot: 0, pattern: 0,
+        })
+        waveAnnounceText = `☕ BOSS — VAGUE ${wave}`
+      } else {
+        const cols = Math.min(8, 4 + Math.floor((wave-1)/2))
+        const rows = Math.min(5, 2 + Math.floor((wave-1)/3))
+        const eW = 26, eH = 20, gap = 6
+        const fieldW = cols*(eW+gap) - gap
+        const startX = Math.floor((W - fieldW)/2)
+        for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+          const type = pickType(wave, r)
+          enemies.push({
+            x: startX+c*(eW+gap), y: 38+r*(eH+gap),
+            w:eW, h:eH, alive:true, row:r, col:c,
+            type, hp: type==='tank'?2:1,
+            wobble: c*0.3, zigPhase: rand(0, Math.PI*2),
+          })
+        }
+        waveAnnounceText = `VAGUE ${wave}`
+      }
+      waveAnnounceTimer = 75
+    }
+
+    const spawnPowerup = (x, y) => {
+      const types = ['double','triple','rapid','x2','shield']
+      const t = types[Math.floor(Math.random()*types.length)]
+      powerups.push({ x: x-7, y, w:14, h:14, vy:1.5, type: t, age:0 })
+    }
+
+    const spawnParticles = (x, y, color, count=8) => {
+      for(let i=0;i<count;i++) particles.push({
+        x, y, vx: rand(-2.5,2.5), vy: rand(-2.5,2.5), life: 24, color
+      })
+    }
+
+    const floatText = (x, y, text, color) => {
+      floatingTexts.push({ x, y, text, color, life: 50 })
+    }
+
+    const applyPowerup = (t) => {
+      if(t === 'double') { pu.double = 540; floatText(player.x+player.w/2, player.y-10, 'DOUBLE', '#6ab4d4') }
+      else if(t === 'triple') { pu.triple = 540; floatText(player.x+player.w/2, player.y-10, 'TRIPLE', '#a88ad4') }
+      else if(t === 'rapid') { pu.rapid = 540; floatText(player.x+player.w/2, player.y-10, 'RAPID', '#d4b06a') }
+      else if(t === 'x2') { pu.x2 = 540; floatText(player.x+player.w/2, player.y-10, 'SCORE ×2', '#7acca0') }
+      else if(t === 'shield') { player.shield = 1; floatText(player.x+player.w/2, player.y-10, 'SHIELD', '#6ab4d4') }
+    }
+
+    const fireBullet = () => {
+      const cx = player.x + player.w/2 - 3
+      const y = player.y - 4
+      if(pu.triple > 0) {
+        bullets.push({ x:cx, y, w:6, h:8, vx:0, vy:-7 })
+        bullets.push({ x:cx-2, y, w:6, h:8, vx:-1.4, vy:-6.6 })
+        bullets.push({ x:cx+2, y, w:6, h:8, vx:1.4, vy:-6.6 })
+      } else if(pu.double > 0) {
+        bullets.push({ x:cx-7, y, w:6, h:8, vx:0, vy:-7 })
+        bullets.push({ x:cx+7, y, w:6, h:8, vx:0, vy:-7 })
+      } else {
+        bullets.push({ x:cx, y, w:6, h:8, vx:0, vy:-7 })
+      }
+    }
+
+    const comboMult = () => 1 + Math.min(combo, 20)*0.05
+    const gainScore = (pts) => {
+      const m = (pu.x2 > 0 ? 2 : 1) * comboMult()
+      score += Math.round(pts * m)
+    }
+    const bumpCombo = () => { combo++; comboTimer = 150 }
+
+    const die = () => { alive = false; setFinalScore(score); setFinalWave(wave); setStatus('lost'); draw() }
 
     const keys = {}
     const onKeyDown = e => {
@@ -1402,30 +1503,68 @@ function CoffeeInvaders({ onClose }) {
       ctx.fillRect(x, y+h-3, w, 2)
     }
 
+    const enemyColors = {
+      basic:  ['#7acca0','#3a8a60'],
+      fast:   ['#a8d4f0','#3a6090'],
+      zigzag: ['#e0a878','#8a4030'],
+      tank:   ['#a888d4','#5a3088'],
+    }
+
     const draw = () => {
       ctx.fillStyle = '#0a0a0e'
       ctx.fillRect(0,0,W,H)
       // Bean dust background
-      ctx.fillStyle = 'rgba(212,176,106,0.25)'
+      ctx.fillStyle = 'rgba(212,176,106,0.22)'
       for(let i=0;i<25;i++){
         const x = (i*73 + frame*0.4) % W
         const y = (i*131 + frame*0.6) % H
         ctx.fillRect(x, y, 1, 1)
       }
-      // Enemies (matcha tea cups — l'ennemi du café !)
+      // Enemies
       for(const e of enemies) {
         if(!e.alive) continue
-        const wob = Math.sin((frame+e.x)*0.05) * 1.5
-        drawCup(e.x+wob, e.y, e.w, e.h, '#7acca0', '#3a8a60')
-        if(frame % 24 < 12) {
-          ctx.fillStyle = 'rgba(255,255,255,0.4)'
-          ctx.fillRect(e.x+wob+10, e.y-3, 2, 3)
+        if(e.type === 'boss') {
+          // Boss: large teapot (red)
+          ctx.fillStyle = '#d47a7a'
+          ctx.fillRect(e.x+10, e.y+15, e.w-20, e.h-25)
+          ctx.fillRect(e.x+25, e.y+5, e.w-50, 12)
+          ctx.fillRect(e.x+e.w/2-3, e.y, 6, 8)
+          ctx.fillRect(e.x, e.y+25, 14, 8)
+          ctx.fillRect(e.x+e.w-6, e.y+22, 6, 14)
+          ctx.fillStyle = '#3a0a0a'
+          ctx.fillRect(e.x+14, e.y+18, e.w-28, 2)
+          // HP bar above
+          ctx.fillStyle = '#1a1a24'
+          ctx.fillRect(e.x, e.y-8, e.w, 4)
+          ctx.fillStyle = e.hp/e.maxHp > 0.5 ? '#7acca0' : (e.hp/e.maxHp > 0.25 ? '#d4b06a' : '#d47a7a')
+          ctx.fillRect(e.x, e.y-8, e.w*(e.hp/e.maxHp), 4)
+        } else {
+          const [body, liquid] = enemyColors[e.type] || enemyColors.basic
+          const wob = Math.sin((frame+e.x)*0.05+e.wobble) * 1.5
+          drawCup(e.x+wob, e.y, e.w, e.h, body, liquid)
+          if(frame % 24 < 12) {
+            ctx.fillStyle = 'rgba(255,255,255,0.4)'
+            ctx.fillRect(e.x+wob+10, e.y-3, 2, 3)
+          }
+          if(e.type === 'tank') {
+            ctx.strokeStyle = '#d4b06a'
+            ctx.lineWidth = 1
+            ctx.strokeRect(e.x+wob+1, e.y+3, e.w-2, e.h-6)
+          }
         }
       }
       // Player (espresso cup)
       drawCup(player.x, player.y, player.w, player.h, '#d4b06a', '#3a1a08')
       ctx.fillStyle = '#c8a060'
       ctx.fillRect(player.x+5, player.y+8, player.w-10, 1)
+      // Shield
+      if(player.shield > 0) {
+        ctx.strokeStyle = '#6ab4d4'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w/2+5, 0, Math.PI*2)
+        ctx.stroke()
+      }
       // Coffee bean bullets
       for(const b of bullets) {
         ctx.fillStyle = '#5c3a1a'
@@ -1438,62 +1577,196 @@ function CoffeeInvaders({ onClose }) {
         ctx.moveTo(b.x+b.w/2, b.y); ctx.lineTo(b.x+b.w/2, b.y+b.h)
         ctx.stroke()
       }
-      // Tea drops (enemy bullets)
+      // Enemy bullets
       ctx.fillStyle = '#7acca0'
       for(const b of enemyBullets) ctx.fillRect(b.x, b.y, b.w, b.h)
+      // Power-ups
+      const puColors = { double:'#6ab4d4', triple:'#a88ad4', rapid:'#d4b06a', x2:'#7acca0', shield:'#6ab4d4' }
+      const puLabels = { double:'2', triple:'3', rapid:'R', x2:'×2', shield:'S' }
+      for(const p of powerups) {
+        const blink = Math.sin(p.age*0.15)*0.3+0.7
+        ctx.globalAlpha = blink
+        ctx.fillStyle = puColors[p.type] || '#fff'
+        ctx.fillRect(p.x, p.y, p.w, p.h)
+        ctx.globalAlpha = 1
+        ctx.fillStyle = '#000'
+        ctx.font = 'bold 9px monospace'
+        const lbl = puLabels[p.type] || '?'
+        const tw = ctx.measureText(lbl).width
+        ctx.fillText(lbl, p.x+(p.w-tw)/2, p.y+10)
+      }
+      // Particles
+      for(const p of particles) {
+        ctx.fillStyle = p.color
+        ctx.globalAlpha = p.life/24
+        ctx.fillRect(p.x, p.y, 2, 2)
+      }
+      ctx.globalAlpha = 1
+      // Floating texts
+      for(const ft of floatingTexts) {
+        ctx.globalAlpha = Math.min(1, ft.life/20)
+        ctx.fillStyle = ft.color
+        ctx.font = 'bold 10px monospace'
+        const tw = ctx.measureText(ft.text).width
+        ctx.fillText(ft.text, ft.x - tw/2, ft.y)
+      }
+      ctx.globalAlpha = 1
       // HUD
       ctx.fillStyle = '#d4b06a'
       ctx.font = 'bold 11px monospace'
       ctx.fillText(`SCORE ${score}`, 8, 16)
+      const wt = `VAGUE ${wave}`
+      ctx.fillText(wt, W - ctx.measureText(wt).width - 8, 16)
+      // Combo
+      if(combo > 1) {
+        ctx.fillStyle = '#7acca0'
+        ctx.font = 'bold 10px monospace'
+        ctx.fillText(`COMBO ×${comboMult().toFixed(2)} (${combo})`, 8, 30)
+      }
+      // Active power-ups
+      ctx.font = 'bold 8px monospace'
+      const puArr = []
+      if(pu.double > 0) puArr.push(['DOUBLE', pu.double, '#6ab4d4'])
+      if(pu.triple > 0) puArr.push(['TRIPLE', pu.triple, '#a88ad4'])
+      if(pu.rapid > 0) puArr.push(['RAPID', pu.rapid, '#d4b06a'])
+      if(pu.x2 > 0) puArr.push(['×2', pu.x2, '#7acca0'])
+      puArr.forEach(([label, t, color], i) => {
+        const x = 8 + i*68
+        ctx.fillStyle = color
+        ctx.fillText(`${label} ${Math.ceil(t/60)}s`, x, H-6)
+      })
+      // Wave announce
+      if(waveAnnounceTimer > 0) {
+        const a = Math.min(1, waveAnnounceTimer/25)
+        ctx.fillStyle = `rgba(212,176,106,${a})`
+        ctx.font = 'bold 20px monospace'
+        const tw = ctx.measureText(waveAnnounceText).width
+        ctx.fillText(waveAnnounceText, (W-tw)/2, H/2)
+      }
     }
 
-    const loop = () => {
-      if(!alive) return
+    const update = () => {
       frame++
+      // Decay
+      if(pu.double > 0) pu.double--
+      if(pu.triple > 0) pu.triple--
+      if(pu.rapid > 0) pu.rapid--
+      if(pu.x2 > 0) pu.x2--
+      if(comboTimer > 0) { comboTimer--; if(comboTimer === 0) combo = 0 }
+      if(waveAnnounceTimer > 0) waveAnnounceTimer--
+
+      // Player movement
       const t = touchRef.current
       if(keys['arrowleft'] || keys['a'] || t.left) player.x -= player.speed
       if(keys['arrowright'] || keys['d'] || t.right) player.x += player.speed
       player.x = Math.max(0, Math.min(W - player.w, player.x))
 
-      if((keys[' '] || t.fire) && frame - lastShot > 16) {
-        bullets.push({ x: player.x + player.w/2 - 3, y: player.y - 4, w: 6, h: 8, vy: -6 })
+      // Shoot
+      const shootDelay = pu.rapid > 0 ? 7 : 16
+      if((keys[' '] || t.fire) && frame - lastShot > shootDelay) {
+        fireBullet()
         lastShot = frame
       }
-      for(const b of bullets) b.y += b.vy
-      bullets = bullets.filter(b => b.y > -10)
 
-      const aliveEnemies = enemies.filter(e => e.alive)
-      if(aliveEnemies.length === 0){
-        alive = false; setFinalScore(score); setStatus('won'); draw(); return
-      }
-      const speed = 0.4 + (1 - aliveEnemies.length/(ROWS*COLS))*1.6
-      let minX = Infinity, maxX = -Infinity, maxY = -Infinity
-      for(const e of aliveEnemies){
-        if(e.x < minX) minX = e.x
-        if(e.x + e.w > maxX) maxX = e.x + e.w
-        if(e.y + e.h > maxY) maxY = e.y + e.h
-      }
-      let drop = false
-      if(maxX + speed*dirX >= W || minX + speed*dirX <= 0) { dirX *= -1; drop = true }
-      for(const e of aliveEnemies) {
-        e.x += speed * dirX
-        if(drop) e.y += 14
+      // Player bullets
+      for(const b of bullets) { b.y += b.vy; b.x += b.vx||0 }
+      bullets = bullets.filter(b => b.y > -10 && b.x > -10 && b.x < W+10)
+
+      // Wave management
+      if(waveTransitionTimer > 0) {
+        waveTransitionTimer--
+        if(waveTransitionTimer === 0) startNextWave()
+      } else {
+        const aliveEnemies = enemies.filter(e => e.alive)
+        if(aliveEnemies.length === 0) {
+          waveTransitionTimer = 50
+        } else {
+          const isBoss = aliveEnemies[0].type === 'boss'
+          if(isBoss) {
+            const boss = aliveEnemies[0]
+            boss.x += boss.vx
+            if(boss.x + boss.w >= W || boss.x <= 0) boss.vx *= -1
+            const bossShootDelay = Math.max(18, 50 - wave*2)
+            if(frame - boss.lastShot > bossShootDelay) {
+              boss.pattern = (boss.pattern + 1) % 3
+              const cx = boss.x + boss.w/2 - 2
+              const cy = boss.y + boss.h
+              const bspd = 2.8 + wave*0.1
+              if(boss.pattern === 0) {
+                for(let dx=-1; dx<=1; dx++) enemyBullets.push({ x:cx+dx*10, y:cy, w:4, h:8, vy:bspd, vx:dx*0.6 })
+              } else if(boss.pattern === 1) {
+                enemyBullets.push({ x:cx, y:cy, w:5, h:10, vy:bspd+1.5, vx:0 })
+              } else {
+                for(let dx=-2; dx<=2; dx++) enemyBullets.push({ x:cx, y:cy, w:4, h:8, vy:bspd, vx:dx*0.85 })
+              }
+              boss.lastShot = frame
+            }
+          } else {
+            // Formation movement
+            const baseSpeed = 0.35 + wave*0.07 + (1 - aliveEnemies.length / Math.max(1, enemies.length))*1.0
+            let minX = Infinity, maxX = -Infinity, maxY = -Infinity
+            for(const e of aliveEnemies){
+              if(e.x < minX) minX = e.x
+              if(e.x + e.w > maxX) maxX = e.x + e.w
+              if(e.y + e.h > maxY) maxY = e.y + e.h
+            }
+            let drop = false
+            if(maxX + baseSpeed*dirX >= W || minX + baseSpeed*dirX <= 0) { dirX *= -1; drop = true }
+            for(const e of aliveEnemies) {
+              let s = baseSpeed
+              if(e.type === 'fast') s *= 1.7
+              e.x += s * dirX
+              if(drop) e.y += 12
+              if(e.type === 'zigzag') e.x += Math.sin((frame*0.05)+e.zigPhase) * 0.7
+            }
+            // Enemy shooting
+            const shootInt = Math.max(22, 95 - wave*5)
+            if(frame - lastEnemyShot > shootInt) {
+              const shooter = aliveEnemies[Math.floor(Math.random()*aliveEnemies.length)]
+              const bspd = 2.4 + wave*0.12
+              enemyBullets.push({ x: shooter.x+shooter.w/2-2, y: shooter.y+shooter.h, w:4, h:8, vy:bspd, vx:0 })
+              lastEnemyShot = frame
+            }
+            // Enemies reach player → game over
+            if(maxY >= player.y) { die(); return }
+          }
+        }
       }
 
-      const shootInterval = Math.max(40, 110 - (1 - aliveEnemies.length/(ROWS*COLS))*70)
-      if(frame - lastEnemyShot > shootInterval) {
-        const shooter = aliveEnemies[Math.floor(Math.random()*aliveEnemies.length)]
-        enemyBullets.push({ x: shooter.x + shooter.w/2 - 2, y: shooter.y + shooter.h, w: 4, h: 8, vy: 2.8 })
-        lastEnemyShot = frame
-      }
-      for(const b of enemyBullets) b.y += b.vy
-      enemyBullets = enemyBullets.filter(b => b.y < H + 10)
+      // Enemy bullets
+      for(const b of enemyBullets) { b.y += b.vy; b.x += b.vx||0 }
+      enemyBullets = enemyBullets.filter(b => b.y < H+10 && b.x > -10 && b.x < W+10)
+
+      // Power-ups
+      for(const p of powerups) { p.y += p.vy; p.age++ }
+      powerups = powerups.filter(p => p.y < H+10)
 
       // Bullets vs enemies
       for(const b of bullets) {
-        for(const e of aliveEnemies) {
+        if(b.y < -10) continue
+        for(const e of enemies) {
+          if(!e.alive) continue
           if(b.x < e.x+e.w && b.x+b.w > e.x && b.y < e.y+e.h && b.y+b.h > e.y) {
-            e.alive = false; b.y = -100; score += 10; break
+            e.hp--
+            b.y = -100
+            if(e.hp <= 0) {
+              e.alive = false
+              const basePts = e.type==='boss' ? (150+wave*15) : (e.type==='tank' ? 25 : (e.type==='zigzag' ? 20 : (e.type==='fast' ? 30 : 10)))
+              const before = score
+              gainScore(basePts)
+              bumpCombo()
+              const gained = score - before
+              floatText(e.x+e.w/2, e.y, `+${gained}`, '#d4b06a')
+              const col = (enemyColors[e.type] && enemyColors[e.type][0]) || '#d47a7a'
+              spawnParticles(e.x+e.w/2, e.y+e.h/2, col, e.type==='boss' ? 30 : 8)
+              const dropChance = e.type==='boss' ? 1 : (e.type==='tank' ? 0.25 : 0.07)
+              if(Math.random() < dropChance) spawnPowerup(e.x+e.w/2, e.y+e.h/2)
+              if(e.type==='boss') {
+                spawnPowerup(e.x+20, e.y+e.h/2)
+                spawnPowerup(e.x+e.w-20, e.y+e.h/2)
+              }
+            }
+            break
           }
         }
       }
@@ -1501,17 +1774,46 @@ function CoffeeInvaders({ onClose }) {
 
       // Enemy bullets vs player
       for(const b of enemyBullets) {
+        if(b.y < -50) continue
         if(b.x < player.x+player.w && b.x+b.w > player.x && b.y < player.y+player.h && b.y+b.h > player.y) {
-          alive = false; setFinalScore(score); setStatus('lost'); draw(); return
+          if(player.shield > 0) {
+            player.shield = 0
+            b.y = H+100
+            spawnParticles(player.x+player.w/2, player.y+player.h/2, '#6ab4d4', 14)
+            floatText(player.x+player.w/2, player.y-10, 'SHIELD!', '#6ab4d4')
+          } else {
+            die(); return
+          }
         }
       }
-      if(maxY >= player.y) {
-        alive = false; setFinalScore(score); setStatus('lost'); draw(); return
-      }
+      enemyBullets = enemyBullets.filter(b => b.y < H+10)
 
+      // Power-up pickup
+      for(const p of powerups) {
+        if(p.x < player.x+player.w && p.x+p.w > player.x && p.y < player.y+player.h && p.y+p.h > player.y) {
+          applyPowerup(p.type)
+          p.y = H+100
+        }
+      }
+      powerups = powerups.filter(p => p.y < H+10)
+
+      // Particles
+      for(const p of particles) { p.x += p.vx; p.y += p.vy; p.life-- }
+      particles = particles.filter(p => p.life > 0)
+
+      // Floating texts
+      for(const ft of floatingTexts) { ft.y -= 0.6; ft.life-- }
+      floatingTexts = floatingTexts.filter(ft => ft.life > 0)
+    }
+
+    const loop = () => {
+      if(!alive) return
+      update()
+      if(!alive) return
       draw()
       requestAnimationFrame(loop)
     }
+    startNextWave()
     requestAnimationFrame(loop)
 
     return () => {
@@ -1521,7 +1823,7 @@ function CoffeeInvaders({ onClose }) {
     }
   }, [gameKey])
 
-  const restart = () => setGameKey(k => k+1)
+  const restart = () => { setStatus('playing'); setGameKey(k => k+1) }
   const tDown = which => () => { touchRef.current[which] = true }
   const tUp = which => () => { touchRef.current[which] = false }
 
@@ -1537,13 +1839,14 @@ function CoffeeInvaders({ onClose }) {
       </div>
       <div style={{position:'relative'}}>
         <canvas ref={canvasRef} width={W} height={H} style={{display:'block',background:'#0a0a0e',border:`2px solid #d4b06a44`,borderRadius:6,maxWidth:'100%',height:'auto',imageRendering:'pixelated'}}/>
-        {status !== 'playing' && (
-          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.78)',borderRadius:6,gap:14}}>
-            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,letterSpacing:'0.2em',color:status==='won'?'#7acca0':'#d47a7a'}}>
-              {status==='won'?'☕ VICTOIRE':'💥 GAME OVER'}
-            </div>
-            <div style={{fontFamily:'monospace',fontSize:13,color:'#d4b06a'}}>SCORE : {finalScore}</div>
-            <button onClick={restart} style={{padding:'10px 24px',background:'#d4b06a22',border:`1px solid #d4b06a`,color:'#d4b06a',borderRadius:6,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation'}}>
+        {status === 'lost' && (
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.82)',borderRadius:6,gap:10}}>
+            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,letterSpacing:'0.2em',color:'#d47a7a'}}>💥 GAME OVER</div>
+            <div style={{fontFamily:'monospace',fontSize:11,color:'#d4b06a',letterSpacing:'0.15em'}}>VAGUE ATTEINTE</div>
+            <div style={{fontFamily:'monospace',fontSize:28,fontWeight:700,color:'#d4b06a',marginTop:-4}}>{finalWave}</div>
+            <div style={{fontFamily:'monospace',fontSize:11,color:'#d4b06a',letterSpacing:'0.15em',marginTop:6}}>SCORE</div>
+            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,color:'#d4b06a',marginTop:-4}}>{finalScore}</div>
+            <button onClick={restart} style={{marginTop:8,padding:'10px 24px',background:'#d4b06a22',border:`1px solid #d4b06a`,color:'#d4b06a',borderRadius:6,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation'}}>
               ⟲ REJOUER
             </button>
           </div>
