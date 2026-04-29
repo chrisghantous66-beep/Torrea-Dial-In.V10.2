@@ -25,9 +25,9 @@ const LIGHT = {
 const GRINDERS = {
   none: { label:'— Sélectionner un moulin —', brand:'', clicks:null, minµm:0, maxµm:1200 },
 
-  // ── Breville / Sage ──
-  breville_sgp:  { label:'Smart Grinder Pro',    brand:'Breville (Sage)', clicks:60,  unit:'réglage', minµm:200, maxµm:820,  espresso:[1,18],  filter:[11,60], aeropress:[13,60], chemex:[21,60], moka:[17,44], description:'60 réglages · 200–820µm' },
-  breville_dcp:  { label:'Dose Control Pro',      brand:'Breville (Sage)', clicks:40,  unit:'réglage', minµm:200, maxµm:820,  espresso:[1,12],  filter:[8,40],  aeropress:[8,40],  chemex:[14,40], moka:[11,30], description:'40 réglages · 200–820µm' },
+  // ── Breville / Sage ── (sources : honestcoffeeguide, roastycoffee, manuel BCG820)
+  breville_sgp:  { label:'Smart Grinder Pro',    brand:'Breville (Sage)', clicks:60,  unit:'réglage', minµm:200, maxµm:820,  espresso:[5,15],  filter:[25,50], aeropress:[22,38], chemex:[40,52], moka:[17,30], description:'60 réglages · 200–820µm · point central espresso ~12' },
+  breville_dcp:  { label:'Dose Control Pro',      brand:'Breville (Sage)', clicks:40,  unit:'réglage', minµm:200, maxµm:820,  espresso:[3,10],  filter:[16,33], aeropress:[14,25],  chemex:[26,35], moka:[11,20], description:'40 réglages · 200–820µm' },
 
   // ── Baratza ──
   baratza_encore:      { label:'Encore',          brand:'Baratza', clicks:40,  unit:'clic',    minµm:250, maxµm:1150, espresso:[5,12],  filter:[18,28], aeropress:[10,22], chemex:[20,30], moka:[8,14],  description:'40 réglages · 250–1150µm' },
@@ -41,24 +41,24 @@ const GRINDERS = {
   mahlkonig_x54:  { label:'X54',   brand:'Mahlkönig', clicks:null, unit:'µm', minµm:150, maxµm:1100, espresso:[200,400], filter:[500,850], aeropress:[350,700], chemex:[600,900],  moka:[280,480], description:'Affichage µm · domestic haut de gamme' },
   mahlkonig_ek43: { label:'EK43',  brand:'Mahlkönig', clicks:10,   unit:'numéro', minµm:200, maxµm:1400, espresso:[1,3],   filter:[6,9],    aeropress:[4,7],     chemex:[7,9],     moka:[2,4],   description:'Référence filtre/single dose 0–10' },
 
-  // ── Eureka ──
-  eureka_specialita: { label:'Mignon Specialità', brand:'Eureka', clicks:null, unit:'µm', minµm:170, maxµm:600, espresso:[170,280], filter:[380,550], aeropress:[280,480], chemex:[400,550], moka:[220,340], description:'Affichage µm · très précis espresso' },
-  eureka_silenzio:   { label:'Mignon Silenzio',   brand:'Eureka', clicks:null, unit:'µm', minµm:170, maxµm:600, espresso:[170,280], filter:[380,550], aeropress:[280,480], chemex:[400,550], moka:[220,340], description:'Version silencieuse · même gamme' },
+  // ── Eureka ── (sources : honestcoffeeguide, Clive Coffee tech tips, ~25µm/pas, 8 numéros/rotation)
+  eureka_specialita: { label:'Mignon Specialità', brand:'Eureka', clicks:null, unit:'µm', minµm:195, maxµm:1100, espresso:[195,290], filter:[400,600], aeropress:[320,560], chemex:[520,700], moka:[260,400], description:'Stepless ~25µm/pas · réglage rotation+nombre' },
+  eureka_silenzio:   { label:'Mignon Silenzio',   brand:'Eureka', clicks:null, unit:'µm', minµm:195, maxµm:1100, espresso:[195,290], filter:[400,600], aeropress:[320,560], chemex:[520,700], moka:[260,400], description:'Version silencieuse · même gamme Specialita' },
 
   // ── Niche ──
   niche_zero: { label:'Zero', brand:'Niche', clicks:50, unit:'numéro', minµm:200, maxµm:1100, espresso:[15,22], filter:[30,45], aeropress:[22,38], chemex:[35,48], moka:[18,26], description:'50 numéros · single-dose de référence' },
   niche_duo:  { label:'Duo',  brand:'Niche', clicks:50, unit:'numéro', minµm:200, maxµm:1100, espresso:[15,22], filter:[30,45], aeropress:[22,38], chemex:[35,48], moka:[18,26], description:'50 numéros · double sortie' },
 
-  // ── Comandante ──
-  comandante_c40:      { label:'C40 MK4',                 brand:'Comandante', clicks:40, unit:'clic', minµm:250, maxµm:1100, espresso:[12,22], filter:[24,36], aeropress:[18,30], chemex:[28,38], moka:[14,22], description:'40 clics/tour · référence manuel' },
-  comandante_c40_red:  { label:'C40 MK4 (Red Clix)',      brand:'Comandante', clicks:40, unit:'clic', minµm:160, maxµm:750,  espresso:[16,30], filter:[32,48], aeropress:[24,40], chemex:[38,52], moka:[18,28], description:'Résolution fine · 160–750µm' },
-  comandante_c60:      { label:'C60 Baracuda',            brand:'Comandante', clicks:40, unit:'clic', minµm:230, maxµm:1100, espresso:[10,20], filter:[22,34], aeropress:[16,28], chemex:[26,36], moka:[12,20], description:'60mm burrs · puissant' },
+  // ── Comandante ── (sources : honestcoffeeguide, James Hoffmann, basicbarista, ~30µm/clic)
+  comandante_c40:      { label:'C40 MK4',                 brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, espresso:[7,15],  filter:[18,28], aeropress:[15,25], chemex:[25,32], moka:[14,22], description:'~30µm/clic · 0–1200µm · référence manuel' },
+  comandante_c40_red:  { label:'C40 MK4 (Red Clix)',      brand:'Comandante', clicks:80, unit:'clic', minµm:0,   maxµm:1200, espresso:[14,30], filter:[36,56], aeropress:[30,50], chemex:[50,64], moka:[28,44], description:'Red Clix ~15µm/clic · résolution doublée' },
+  comandante_c60:      { label:'C60 Baracuda',            brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, espresso:[6,13],  filter:[16,26], aeropress:[13,23], chemex:[23,30], moka:[12,20], description:'60mm burrs · plus rapide que C40' },
 
-  // ── 1Zpresso ──
-  zpresso_jmax:    { label:'J-Max',    brand:'1Zpresso', clicks:90,  unit:'clic', minµm:150, maxµm:1000, espresso:[10,25], filter:[45,70], aeropress:[25,55], chemex:[55,80], moka:[15,28], description:'90 clics/tour · précision maximale' },
-  zpresso_jxpro:   { label:'JX-Pro',   brand:'1Zpresso', clicks:90,  unit:'clic', minµm:150, maxµm:900,  espresso:[10,22], filter:[40,65], aeropress:[22,50], chemex:[50,70], moka:[12,25], description:'90 clics/tour · polyvalent' },
-  zpresso_kmax:    { label:'K-Max',    brand:'1Zpresso', clicks:90,  unit:'clic', minµm:150, maxµm:900,  espresso:[8,22],  filter:[40,65], aeropress:[22,50], chemex:[50,70], moka:[10,24], description:'90 clics/tour · option acier inox' },
-  zpresso_zp6:     { label:'ZP6',      brand:'1Zpresso', clicks:180, unit:'clic', minµm:100, maxµm:900,  espresso:[10,40], filter:[80,130],aeropress:[45,100],chemex:[100,140],moka:[15,35], description:'180 clics/tour · ultra précis espresso' },
+  // ── 1Zpresso ── (sources : 1zpresso.coffee, honestcoffeeguide ; total = rotations × clics/rotation)
+  zpresso_jmax:    { label:'J-Max',    brand:'1Zpresso', clicks:405, unit:'clic', minµm:25,  maxµm:1190, espresso:[70,150],  filter:[160,280], aeropress:[130,270], chemex:[210,320], moka:[150,260], description:'90 clics/rotation · 4,5 rot · 8,8µm/clic · précision espresso' },
+  zpresso_jxpro:   { label:'JX-Pro',   brand:'1Zpresso', clicks:200, unit:'clic', minµm:50,  maxµm:1300, espresso:[40,80],   filter:[100,160], aeropress:[80,140],  chemex:[140,180], moka:[80,120],  description:'40 clics/rotation · 5 rot · 12,5µm/clic · polyvalent filter' },
+  zpresso_kmax:    { label:'K-Max',    brand:'1Zpresso', clicks:200, unit:'clic', minµm:50,  maxµm:1300, espresso:[40,80],   filter:[100,160], aeropress:[80,140],  chemex:[140,180], moka:[80,120],  description:'40 clics/rotation · burrs 48mm · proche du JX-Pro' },
+  zpresso_zp6:     { label:'ZP6',      brand:'1Zpresso', clicks:240, unit:'clic', minµm:100, maxµm:1100, espresso:[10,55],   filter:[80,160],  aeropress:[60,140],  chemex:[140,200], moka:[35,80],   description:'240 clics/rotation · burrs ZP6 brewing-spec · ultra fin' },
 
   // ── Timemore ──
   timemore_c2:     { label:'C2',       brand:'Timemore', clicks:20, unit:'clic', minµm:250, maxµm:1000, espresso:[8,15],  filter:[14,22], aeropress:[10,18], chemex:[16,24], moka:[9,14],  description:'20 clics/tour · rapport qualité/prix' },
