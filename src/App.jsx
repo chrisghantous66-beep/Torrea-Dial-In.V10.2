@@ -2353,17 +2353,27 @@ function buildGenTip({methodId,coffee,roast,profile,intensity}){
   if(roast.id==='dark')  parts.push('Café foncé → eau moins chaude pour limiter l\'amertume.')
   if(intensity.id==='strong') parts.push('Ratio resserré pour intensifier le corps.')
   if(intensity.id==='mild')   parts.push('Ratio dilué pour une tasse longue et claire.')
-  if(['fruity','citrus','floral'].includes(profile.id)) parts.push("Mouture légèrement plus fine pour révéler l'acidité.")
-  if(profile.id==='chocolate') parts.push('Mouture plus grossière pour mettre en avant le corps et le sucré.')
+  if(profile.ids.some(id=>['fruity','citrus','floral'].includes(id))) parts.push("Mouture légèrement plus fine pour révéler l'acidité.")
+  if(profile.ids.includes('chocolate')) parts.push('Mouture plus grossière pour mettre en avant le corps et le sucré.')
   if(methodId==='cold-brew') parts.push('Filtration soignée recommandée pour une tasse limpide.')
   return parts.join(' ')
 }
 
-function generateRecipe({methodId,coffee,roastId,profileId,intensityId,grinderId}){
+function generateRecipe({methodId,coffee,roastId,profileIds,intensityId,grinderId}){
   const base=GEN_METHODS[methodId]; if(!base) return null
-  const roast    = ROAST_LEVELS.find(x=>x.id===roastId)       || ROAST_LEVELS[1]
-  const profile  = CUP_PROFILES.find(x=>x.id===profileId)     || CUP_PROFILES[0]
-  const intensity= INTENSITIES.find(x=>x.id===intensityId)    || INTENSITIES[1]
+  const roast    = ROAST_LEVELS.find(x=>x.id===roastId)    || ROAST_LEVELS[1]
+  const intensity= INTENSITIES.find(x=>x.id===intensityId) || INTENSITIES[1]
+
+  const selected = (profileIds||[]).map(id=>CUP_PROFILES.find(x=>x.id===id)).filter(Boolean)
+  const profilesList = selected.length ? selected : [CUP_PROFILES[0]]
+  const avg = key => profilesList.reduce((s,p)=>s+p[key],0)/profilesList.length
+  const profile = {
+    ids: profilesList.map(p=>p.id),
+    label: profilesList.map(p=>p.label).join(' + '),
+    tempDelta: avg('tempDelta'),
+    grindDelta: avg('grindDelta'),
+    ratioDelta: avg('ratioDelta'),
+  }
 
   const dose=base.dose
   const ratio=clamp(base.ratioBase+roast.ratioDelta+profile.ratioDelta+intensity.ratioDelta, 5, 22)
@@ -2390,7 +2400,7 @@ function generateRecipe({methodId,coffee,roastId,profileId,intensityId,grinderId
       coffee:`${dose} g`,
       water:`${water} g`,
       ratio:`1:${ratio.toFixed(1)}`,
-      temperature:`${temp}°C`,
+      temperature:`${Math.round(temp)}°C`,
       grind:grindLabel,
       totalTime:formatTime(base.totalSec),
     },
@@ -2403,12 +2413,19 @@ function generateRecipe({methodId,coffee,roastId,profileId,intensityId,grinderId
 function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T}){
   const [open,setOpen]=useState(false)
   const [roast,setRoast]=useState('medium')
-  const [profile,setProfile]=useState('balanced')
+  const [profileIds,setProfileIds]=useState(['balanced'])
   const [intensity,setIntensity]=useState('balanced')
   const [generated,setGenerated]=useState(null)
 
+  const toggleProfile=(id)=>{
+    setProfileIds(prev=>{
+      const next=prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]
+      return next.length===0?['balanced']:next
+    })
+  }
+
   const onGenerate=()=>{
-    const r=generateRecipe({methodId,coffee,roastId:roast,profileId:profile,intensityId:intensity,grinderId})
+    const r=generateRecipe({methodId,coffee,roastId:roast,profileIds,intensityId:intensity,grinderId})
     setGenerated(r)
   }
 
@@ -2449,10 +2466,10 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T}){
             ))}
           </div>
 
-          <SectionLabel>③ Profil en tasse recherché</SectionLabel>
+          <SectionLabel>③ Profil en tasse recherché <span style={{color:T.textDim,letterSpacing:0,textTransform:'none'}}>(plusieurs choix possibles)</span></SectionLabel>
           <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
             {CUP_PROFILES.map(p=>(
-              <ChoiceBtn key={p.id} active={profile===p.id} color={T.blue} onClick={()=>setProfile(p.id)}>{p.label}</ChoiceBtn>
+              <ChoiceBtn key={p.id} active={profileIds.includes(p.id)} color={T.blue} onClick={()=>toggleProfile(p.id)}>{p.label}</ChoiceBtn>
             ))}
           </div>
 
@@ -2839,9 +2856,9 @@ export default function App() {
         </div>
 
         {/* NAV PRINCIPALE */}
-        <div style={{display:'flex',marginBottom:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden',boxShadow:`0 2px 8px ${T.shadow}`}}>
+        <div style={{display:'flex',flexWrap:'wrap',marginBottom:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden',boxShadow:`0 2px 8px ${T.shadow}`}}>
           {[['calibration','⬤ Calibration'],['history',`☰ Historique (${history.length})`],['recettes','☕ Recettes'],['comparateur','⇄ Comparer'],['boutique','🛒 Acheter']].map(([t,label])=>(
-            <button key={t} onClick={()=>setMainTab(t)} style={{flex:1,padding:'12px 0',fontFamily:'sans-serif',fontSize:11,letterSpacing:'0.18em',textTransform:'uppercase',background:mainTab===t?T.bg3:'transparent',color:mainTab===t?T.text:T.textMute,border:'none',cursor:'pointer',touchAction:'manipulation',transition:'all 0.2s',fontWeight:mainTab===t?700:400,borderBottom:mainTab===t?`2px solid ${T.gold}`:'2px solid transparent'}}>
+            <button key={t} onClick={()=>setMainTab(t)} style={{flex:'1 1 33.33%',minWidth:0,padding:'12px 4px',fontFamily:'sans-serif',fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',background:mainTab===t?T.bg3:'transparent',color:mainTab===t?T.text:T.textMute,border:'none',cursor:'pointer',touchAction:'manipulation',transition:'all 0.2s',fontWeight:mainTab===t?700:400,borderBottom:mainTab===t?`2px solid ${T.gold}`:'2px solid transparent'}}>
               {label}
             </button>
           ))}
