@@ -1389,7 +1389,9 @@ function CoffeeInvaders({ onClose, T }) {
   const [controlMode, setControlMode] = useState(() => {
     try { return localStorage.getItem(INVADERS_CONTROL_KEY) || 'buttons' } catch { return 'buttons' }
   })
-  const touchRef = useRef({ left:false, right:false, fire:false, dragging:false, targetX:null })
+  const [autoFire, setAutoFire] = useState(false)
+  const touchRef = useRef({ left:false, right:false, fire:false, autoFire:false, dragging:false, targetX:null })
+  useEffect(() => { touchRef.current.autoFire = autoFire }, [autoFire])
   const themeRef = useRef(T)
   const hiscoreRef = useRef(hiscore)
   const controlModeRef = useRef(controlMode)
@@ -1525,6 +1527,7 @@ function CoffeeInvaders({ onClose, T }) {
       alive = false
       setFinalScore(score)
       setFinalWave(wave)
+      setAutoFire(false)
       const cur = hiscoreRef.current
       if(score > cur.score) {
         const next = { score, wave }
@@ -1738,7 +1741,7 @@ function CoffeeInvaders({ onClose, T }) {
 
       // Shoot
       const shootDelay = pu.rapid > 0 ? 7 : 16
-      if((keys[' '] || t.fire) && frame - lastShot > shootDelay) {
+      if((keys[' '] || t.fire || t.autoFire) && frame - lastShot > shootDelay) {
         fireBullet()
         lastShot = frame
       }
@@ -1906,10 +1909,12 @@ function CoffeeInvaders({ onClose, T }) {
 
   const startGame = () => {
     setIsNewRecord(false)
+    setAutoFire(false)
     setStatus('playing')
     setGameKey(k => k + 1)
   }
-  const goToMenu = () => { setStatus('menu') }
+  const goToMenu = () => { setAutoFire(false); setStatus('menu') }
+  const toggleAutoFire = () => setAutoFire(v => !v)
   const tDown = which => () => { touchRef.current[which] = true }
   const tUp = which => () => { touchRef.current[which] = false }
 
@@ -1942,6 +1947,7 @@ function CoffeeInvaders({ onClose, T }) {
   const panelBg = isLight ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.82)'
   const btn = {padding:'14px 22px',background:T.bg3,border:`1px solid ${T.gold}55`,color:T.gold,borderRadius:6,fontSize:20,touchAction:'manipulation',userSelect:'none',cursor:'pointer',WebkitTapHighlightColor:'transparent'}
   const fireBtn = {...btn,padding:'14px 28px',background:`${T.gold}22`,border:`1px solid ${T.gold}`,fontSize:14,letterSpacing:'0.1em',fontWeight:700}
+  const fireBtnActive = {...fireBtn,background:`${T.gold}55`,boxShadow:`0 0 14px ${T.gold}88`}
   const modeBtn = (active) => ({
     flex:1,padding:'14px 12px',
     background: active ? `${T.gold}22` : T.bg3,
@@ -2027,12 +2033,16 @@ function CoffeeInvaders({ onClose, T }) {
           ) : (
             <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,letterSpacing:'0.1em',padding:'0 4px'}}>✋ Glisser sur l'écran</div>
           )}
-          <button onTouchStart={tDown('fire')} onTouchEnd={tUp('fire')} onMouseDown={tDown('fire')} onMouseUp={tUp('fire')} onMouseLeave={tUp('fire')} style={fireBtn}>🫘 FIRE</button>
+          {controlMode === 'swipe' ? (
+            <button onClick={toggleAutoFire} style={autoFire ? fireBtnActive : fireBtn}>{autoFire ? '🫘 AUTO ●' : '🫘 FIRE'}</button>
+          ) : (
+            <button onTouchStart={tDown('fire')} onTouchEnd={tUp('fire')} onMouseDown={tDown('fire')} onMouseUp={tUp('fire')} onMouseLeave={tUp('fire')} style={fireBtn}>🫘 FIRE</button>
+          )}
         </div>
       )}
       <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,textAlign:'center',letterSpacing:'0.1em'}}>
         {controlMode === 'swipe' && status === 'playing'
-          ? '✋ Glisser pour bouger · 🫘 = tirer · ÉCHAP = quitter'
+          ? '✋ Glisser pour bouger · 🫘 = tir auto on/off · ÉCHAP = quitter'
           : '← → / A D · ESPACE = tirer · ÉCHAP = quitter'}
       </div>
     </div>
