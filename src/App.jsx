@@ -2526,6 +2526,41 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
   )
 }
 
+function SavedRecipesPanel({savedRecipes,onDelete,T,grinder}){
+  const [open,setOpen]=useState(false)
+  const count=savedRecipes.length
+  const empty=count===0
+  return(
+    <div style={{background:T.bg2,border:`1px solid ${T.gold}55`,borderRadius:10,boxShadow:`0 2px 8px ${T.shadow}`,overflow:'hidden',opacity:empty?0.6:1}}>
+      <div onClick={()=>!empty&&setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 14px',cursor:empty?'default':'pointer',background:`${T.gold}10`}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{fontSize:12,letterSpacing:'0.2em',textTransform:'uppercase',color:T.gold,fontWeight:700}}>⭐ Mes recettes ({count})</div>
+          <div style={{fontSize:10,color:T.textDim,marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{empty?'Sauvegarde une recette pour la retrouver ici':`${count} recette${count>1?'s':''} pour cette méthode`}</div>
+        </div>
+        {!empty&&<div style={{fontSize:18,color:T.gold,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',flexShrink:0,marginLeft:8}}>▾</div>}
+      </div>
+      {open&&!empty&&(
+        <div style={{padding:'10px 14px 4px'}}>
+          {savedRecipes.map(r=>(
+            <div key={r.id}>
+              <RecipeCard recipe={r} T={T} grinder={grinder}/>
+              <div style={{marginTop:-8,marginBottom:14,display:'flex',justifyContent:'flex-end'}}>
+                <button onClick={()=>onDelete(r.id)} style={{
+                  padding:'5px 12px',
+                  border:`1px solid ${T.border}`,background:T.bg3,color:T.textMute,
+                  borderRadius:14,cursor:'pointer',
+                  fontSize:10,letterSpacing:'0.1em',
+                  touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                }}>🗑 Supprimer</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TabRecettes({T,coffee,setCoffee}){
   const [active,setActive]=useState('v60')
   const [grinderId,setGrinderId]=useState('none')
@@ -2600,27 +2635,14 @@ function TabRecettes({T,coffee,setCoffee}){
         </div>
       )}
 
-      <RecipeGenerator methodId={active} coffee={coffee} setCoffee={setCoffee} grinderId={grinderId} T={T} onSave={handleSaveRecipe}/>
-
-      {savedForMethod.length>0&&(
-        <div style={{marginBottom:14}}>
-          <div style={{fontSize:10,letterSpacing:'0.2em',textTransform:'uppercase',color:T.gold,fontWeight:700,marginBottom:8}}>⭐ Mes recettes sauvegardées ({savedForMethod.length})</div>
-          {savedForMethod.map(r=>(
-            <div key={r.id}>
-              <RecipeCard recipe={r} T={T} grinder={grinder}/>
-              <div style={{marginTop:-8,marginBottom:14,display:'flex',justifyContent:'flex-end'}}>
-                <button onClick={()=>handleDeleteSaved(r.id)} style={{
-                  padding:'5px 12px',
-                  border:`1px solid ${T.border}`,background:T.bg3,color:T.textMute,
-                  borderRadius:14,cursor:'pointer',
-                  fontSize:10,letterSpacing:'0.1em',
-                  touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
-                }}>🗑 Supprimer</button>
-              </div>
-            </div>
-          ))}
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16,alignItems:'flex-start'}}>
+        <div style={{flex:'1 1 280px',minWidth:0}}>
+          <RecipeGenerator methodId={active} coffee={coffee} setCoffee={setCoffee} grinderId={grinderId} T={T} onSave={handleSaveRecipe}/>
         </div>
-      )}
+        <div style={{flex:'1 1 280px',minWidth:0}}>
+          <SavedRecipesPanel savedRecipes={savedForMethod} onDelete={handleDeleteSaved} T={T} grinder={grinder}/>
+        </div>
+      </div>
 
       {recipes.map(r=><RecipeCard key={r.id} recipe={r} T={T} grinder={grinder}/>)}
     </div>
