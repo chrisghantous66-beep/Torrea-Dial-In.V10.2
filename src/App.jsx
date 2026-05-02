@@ -116,6 +116,7 @@ const MC = '#6ab4d4'
 const STORAGE_KEY = 'torrea_v3'
 const COFFEE_LIB_KEY = 'torrea_coffees'
 const PARAMS_KEY = 'torrea_params_v1'
+const SAVED_RECIPES_KEY = 'torrea_saved_recipes_v1'
 function loadSavedParams() {
   try { return JSON.parse(localStorage.getItem(PARAMS_KEY)||'{}') } catch { return {} }
 }
@@ -2410,12 +2411,13 @@ function generateRecipe({methodId,coffee,roastId,profileIds,intensityId,grinderI
   }
 }
 
-function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T}){
+function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
   const [open,setOpen]=useState(false)
   const [roast,setRoast]=useState('medium')
   const [profileIds,setProfileIds]=useState(['balanced'])
   const [intensity,setIntensity]=useState('balanced')
   const [generated,setGenerated]=useState(null)
+  const [justSaved,setJustSaved]=useState(false)
 
   const toggleProfile=(id)=>{
     setProfileIds(prev=>{
@@ -2427,6 +2429,13 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T}){
   const onGenerate=()=>{
     const r=generateRecipe({methodId,coffee,roastId:roast,profileIds,intensityId:intensity,grinderId})
     setGenerated(r)
+    setJustSaved(false)
+  }
+
+  const handleSave=()=>{
+    if(!generated||justSaved) return
+    const ok=onSave(generated)
+    if(ok) setJustSaved(true)
   }
 
   const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
@@ -2500,6 +2509,17 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T}){
       {generated&&(
         <div style={{padding:'4px 14px 14px'}}>
           <RecipeCard recipe={generated} T={T} grinder={grinder}/>
+          <button onClick={handleSave} disabled={justSaved} style={{
+            width:'100%',padding:'11px 0',marginTop:-4,
+            border:`1px solid ${justSaved?T.green:T.gold}`,
+            background:justSaved?`${T.green}22`:`${T.gold}11`,
+            color:justSaved?T.green:T.gold,
+            borderRadius:6,cursor:justSaved?'default':'pointer',
+            fontSize:12,letterSpacing:'0.15em',fontWeight:700,
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>
+            {justSaved?'✓ RECETTE SAUVEGARDÉE':'💾 SAUVEGARDER CETTE RECETTE'}
+          </button>
         </div>
       )}
     </div>
@@ -2509,9 +2529,32 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T}){
 function TabRecettes({T,coffee,setCoffee}){
   const [active,setActive]=useState('v60')
   const [grinderId,setGrinderId]=useState('none')
+  const [savedRecipes,setSavedRecipes]=useState(()=>{try{const s=localStorage.getItem(SAVED_RECIPES_KEY);return s?JSON.parse(s):[]}catch{return[]}})
+  useEffect(()=>{try{localStorage.setItem(SAVED_RECIPES_KEY,JSON.stringify(savedRecipes))}catch{}},[savedRecipes])
+
   const recipes=RECIPES.filter(r=>r.method===active)
+  const savedForMethod=savedRecipes.filter(r=>r.method===active)
   const activeM=METHODS.find(m=>m.id===active)
   const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
+
+  const handleSaveRecipe=(recipe)=>{
+    const name=window.prompt('Nom de la recette (laisse vide pour conserver le titre par défaut) :', recipe.title)
+    if(name===null) return false
+    const finalTitle=(name||'').trim()||recipe.title
+    const saved={
+      ...recipe,
+      id:`saved-${Date.now()}`,
+      title:finalTitle,
+      badge:{type:'standard',label:'⭐ Sauvegardée'},
+      savedAt:Date.now(),
+    }
+    setSavedRecipes(prev=>[saved,...prev])
+    return true
+  }
+  const handleDeleteSaved=(id)=>{
+    if(!window.confirm('Supprimer cette recette sauvegardée ?')) return
+    setSavedRecipes(prev=>prev.filter(r=>r.id!==id))
+  }
 
   const brands={}
   Object.entries(GRINDERS).forEach(([id,g])=>{
@@ -2557,7 +2600,27 @@ function TabRecettes({T,coffee,setCoffee}){
         </div>
       )}
 
-      <RecipeGenerator methodId={active} coffee={coffee} setCoffee={setCoffee} grinderId={grinderId} T={T}/>
+      <RecipeGenerator methodId={active} coffee={coffee} setCoffee={setCoffee} grinderId={grinderId} T={T} onSave={handleSaveRecipe}/>
+
+      {savedForMethod.length>0&&(
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:10,letterSpacing:'0.2em',textTransform:'uppercase',color:T.gold,fontWeight:700,marginBottom:8}}>⭐ Mes recettes sauvegardées ({savedForMethod.length})</div>
+          {savedForMethod.map(r=>(
+            <div key={r.id}>
+              <RecipeCard recipe={r} T={T} grinder={grinder}/>
+              <div style={{marginTop:-8,marginBottom:14,display:'flex',justifyContent:'flex-end'}}>
+                <button onClick={()=>handleDeleteSaved(r.id)} style={{
+                  padding:'5px 12px',
+                  border:`1px solid ${T.border}`,background:T.bg3,color:T.textMute,
+                  borderRadius:14,cursor:'pointer',
+                  fontSize:10,letterSpacing:'0.1em',
+                  touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                }}>🗑 Supprimer</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {recipes.map(r=><RecipeCard key={r.id} recipe={r} T={T} grinder={grinder}/>)}
     </div>
