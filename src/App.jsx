@@ -2885,6 +2885,10 @@ export default function App() {
         {mainTab==='recettes'&&<TabRecettes T={T} coffee={coffee} setCoffee={setCoffee}/>}
         {mainTab==='comparateur'&&<TabComparateur T={T}/>}
         {mainTab==='boutique'&&<TabBoutique T={T}/>}
+
+        <div style={{marginTop:32,padding:'16px 0 8px',borderTop:`1px solid ${T.border}`,textAlign:'center',fontSize:10,letterSpacing:'0.15em',color:T.textMute,textTransform:'uppercase'}}>
+          © {new Date().getFullYear()} Torrea — Tous droits réservés
+        </div>
       </div>
     </div>
   )
