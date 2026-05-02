@@ -24,6 +24,7 @@ export const BADGE_COLORS = {
   world2016: { bg: '#E6F1FB', text: '#0C447C' },
   expert:    { bg: '#EEEDFE', text: '#3C3489' },
   standard:  { bg: '#E6F1FB', text: '#0C447C' },
+  generator: { bg: '#FFF6E0', text: '#7A5A1F' },
 }
 
 export const RECIPES = [

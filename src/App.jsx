@@ -422,7 +422,11 @@ Score /100 calculé d'après le ratio et le temps. Un score ≥ 90 = extraction 
 CONSEILS
 • Changez UN paramètre à la fois entre chaque shot
 • Attendez que le moulin soit chaud (2-3 shots) avant de dial-in
-• Notez vos recettes avec ✨ pour les retrouver dans l'historique`
+• Notez vos recettes avec ✨ pour les retrouver dans l'historique
+
+🫘 EASTER EGG — COFFEE INVADER
+Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suffisent à la réveiller.
+Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…`
 
 const GUIDE_MACHINE = `GUIDE D'UTILISATION — ONGLET MACHINE
 (Breville Dual Boiler)
@@ -459,7 +463,11 @@ Score sur 100 combinant ratio, temps et température.
 RÉGLAGES BREVILLE DUAL BOILER
 • Pré-infusion : menu Extraction → Pre-infusion
 • Température : menu Steam/Extraction → Temp.
-• Pression max réglable sur la machine`
+• Pression max réglable sur la machine
+
+🫘 EASTER EGG — COFFEE INVADER
+Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suffisent à la réveiller.
+Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…`
 
 function GuideModal({ mode, onClose, T }) {
   const text = mode === 'moulin' ? GUIDE_MOULIN : GUIDE_MACHINE
@@ -1121,6 +1129,14 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
   const [grindMode,setGrindMode]=useState('µm')
   const [clicksManual,setClicksManual]=useState(20)
   const [liveWeight,setLiveWeight]=useState(0),[liveWeightOpen,setLiveWeightOpen]=useState(false)
+  const [showInvaders,setShowInvaders]=useState(false)
+  const titleClickRef=useRef({count:0,lastTime:0})
+  const onTitleClick=()=>{
+    const now=Date.now(),ref=titleClickRef.current
+    if(now-ref.lastTime>1500)ref.count=0
+    ref.count++;ref.lastTime=now
+    if(ref.count>=7){ref.count=0;setShowInvaders(true)}
+  }
 
   const m=BREW_METHODS[method]
   const mColors={espresso:T.gold,filter:T.blue,aeropress:T.green,chemex:T.purple,moka:T.orange}
@@ -1157,6 +1173,7 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
     {showChart&&<GrindChartModal onClose={()=>setShowChart(false)} T={T}/>}
     {showGuide&&<GuideModal mode="moulin" onClose={()=>setShowGuide(false)} T={T}/>}
     {liveWeightOpen&&<NumPad label="Poids en tasse" unit="g" initial={liveWeight>0?liveWeight:yld} min={0} max={500} onConfirm={w=>{setLiveWeight(w);setYld(w);setLiveWeightOpen(false)}} onClose={()=>setLiveWeightOpen(false)} T={T}/>}
+    {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)}/>}
 
     {/* Boutons utilitaires */}
     <div style={{display:'flex',gap:8,marginBottom:16}}>
@@ -1169,7 +1186,7 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
 
     {/* 2. MÉTHODE D'EXTRACTION */}
     <div style={card(T)}>
-      <div style={SL(T)}>Méthode d'extraction</div>
+      <div onClick={onTitleClick} style={{...SL(T),cursor:'pointer',userSelect:'none',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>Méthode d'extraction</div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
         {Object.entries(BREW_METHODS).map(([k,v])=>{
           const mc2=mColors[k]||T.gold
@@ -2182,7 +2199,297 @@ function RecipeCard({recipe,T,grinder}){
   )
 }
 
-function TabRecettes({T}){
+// ─── GÉNÉRATEUR DE RECETTES ──────────────────────────────────────────────────
+
+const ROAST_LEVELS = [
+  { id:'light',  label:'☀ Light',   color:'#d4b06a', tempDelta:+2, grindDelta:-25, ratioDelta:+0.5 },
+  { id:'medium', label:'◐ Medium',  color:'#b88040', tempDelta: 0, grindDelta:  0, ratioDelta: 0   },
+  { id:'dark',   label:'● Dark',    color:'#7a4020', tempDelta:-3, grindDelta:+30, ratioDelta:-0.5 },
+]
+
+const CUP_PROFILES = [
+  { id:'balanced',  label:'⚖ Équilibré',  tempDelta: 0, grindDelta:  0, ratioDelta: 0   },
+  { id:'fruity',    label:'🍓 Fruité',    tempDelta: 0, grindDelta:-15, ratioDelta:+0.3 },
+  { id:'citrus',    label:'🍋 Agrumes',   tempDelta:-1, grindDelta:-20, ratioDelta:+0.5 },
+  { id:'floral',    label:'🌸 Floral',    tempDelta:-1, grindDelta:-10, ratioDelta:+0.4 },
+  { id:'chocolate', label:'🍫 Chocolaté', tempDelta:+1, grindDelta:+20, ratioDelta:-0.3 },
+  { id:'sweet',     label:'🍯 Sucré',     tempDelta:+1, grindDelta:+10, ratioDelta:-0.2 },
+]
+
+const INTENSITIES = [
+  { id:'mild',     label:'Doux',      ratioDelta:+1.0 },
+  { id:'balanced', label:'Équilibre', ratioDelta: 0   },
+  { id:'strong',   label:'Corsé',     ratioDelta:-1.5 },
+]
+
+const GEN_METHODS = {
+  'v60':          { ratioBase:16,   grindBase:600,  tempBase:93, totalSec:200, dose:15 },
+  'switch':       { ratioBase:14,   grindBase:780,  tempBase:90, totalSec:180, dose:15 },
+  'chemex':       { ratioBase:16.5, grindBase:750,  tempBase:94, totalSec:280, dose:30 },
+  'french-press': { ratioBase:16,   grindBase:900,  tempBase:94, totalSec:540, dose:30 },
+  'aeropress':    { ratioBase:14,   grindBase:600,  tempBase:88, totalSec:120, dose:14 },
+  'drip':         { ratioBase:16,   grindBase:700,  tempBase:93, totalSec:300, dose:30 },
+  'kalita':       { ratioBase:17,   grindBase:700,  tempBase:94, totalSec:200, dose:20 },
+  'origami':      { ratioBase:16,   grindBase:700,  tempBase:93, totalSec:200, dose:16 },
+  'syphon':       { ratioBase:13,   grindBase:600,  tempBase:92, totalSec:80,  dose:23 },
+  'cold-brew':    { ratioBase:8,    grindBase:1050, tempBase:20, totalSec:50400, dose:80 },
+  'turkish':      { ratioBase:13,   grindBase:90,   tempBase:85, totalSec:210, dose:8  },
+}
+
+const STEP_BUILDERS = {
+  v60: ({dose,water,temp,grindµm,roast})=>{
+    const bloom=Math.round(dose*2.5)
+    const remain=water-bloom, p2=Math.round(remain*0.45), p3=Math.round(remain*0.35), p4=remain-p2-p3
+    return [
+      {time:'Avant', instruction:`Rincer le filtre à ${temp}°C. ${dose} g de café · mouture ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Bloom : verser ${bloom} g (${roast.id==='light'?'agitation vigoureuse':'swirl léger'}).`},
+      {time:'0:40',  instruction:`Verser ${p2} g (total ${bloom+p2} g) en spirale.`},
+      {time:'1:20',  instruction:`Verser ${p3} g (total ${bloom+p2+p3} g).`},
+      {time:'2:00',  instruction:`Dernière verse ${p4} g (total ${water} g). Swirl final.`},
+      {time:'~3:00', instruction:'Fin du tirage. Servir.'},
+    ]
+  },
+  switch: ({dose,water,temp,grindµm})=>{
+    const p1=Math.round(water*0.5), p2=water-p1
+    return [
+      {time:'Avant', instruction:`Rincer le filtre. ${dose} g · ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Switch FERMÉ. Verser ${p1} g à ${temp}°C.`},
+      {time:'1:30',  instruction:'Ouvrir le switch (drainage rapide).'},
+      {time:'2:00',  instruction:`Refermer. Verser ${p2} g à ${Math.max(70,temp-5)}°C. Infuser 30 sec.`},
+      {time:'2:30',  instruction:'Ouvrir le switch. Service.'},
+    ]
+  },
+  chemex: ({dose,water,temp,grindµm})=>{
+    const bloom=Math.round(dose*2)
+    return [
+      {time:'Avant', instruction:`Rincer le filtre épais (côté triple vers le bec). ${dose} g · ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Bloom : ${bloom} g à ${temp}°C. Stir doux.`},
+      {time:'0:45',  instruction:`Verser jusqu'à ${Math.round(water*0.6)} g en cercles concentriques.`},
+      {time:'1:30',  instruction:`Continuer jusqu'à ${water} g.`},
+      {time:'2:00',  instruction:'Stir clockwise + counter-clockwise. Tourbillonner.'},
+      {time:'~4:00', instruction:'Fin du tirage.'},
+    ]
+  },
+  'french-press': ({dose,water,temp,grindµm})=>([
+    {time:'Avant',   instruction:`Préchauffer la cafetière. ${dose} g · ${grindµm} µm.`},
+    {time:'0:00',    instruction:`Verser ${water} g à ${temp}°C en 10–15 sec.`},
+    {time:'4:00',    instruction:'Briser la croûte avec une cuillère. Écumer la mousse.'},
+    {time:'4:30',    instruction:'Couvrir sans plonger. Laisser décanter.'},
+    {time:'9:30',    instruction:'Pousser le piston jusqu\'à la surface du liquide (sans foncer).'},
+    {time:'10:00',   instruction:'Servir immédiatement.'},
+  ]),
+  aeropress: ({dose,water,temp,grindµm,intensity})=>{
+    const inverted=intensity.id!=='mild'
+    return [
+      {time:'Avant', instruction:`AeroPress en position ${inverted?'inversée':'standard'}. ${dose} g · ${grindµm} µm. Filtre rincé.`},
+      {time:'0:00',  instruction:`Verser ${water} g à ${temp}°C. Stir 5 sec.`},
+      {time:'0:30',  instruction:'Couvrir et laisser infuser.'},
+      {time:'1:30',  instruction:inverted?'Retourner sur la tasse. Presser doucement (~30 sec).':'Presser doucement (~30 sec).'},
+      {time:'2:00',  instruction:'Fin de l\'extraction.'},
+    ]
+  },
+  drip: ({dose,water,temp,grindµm})=>([
+    {time:'Avant',    instruction:`Préchauffer la machine. Filtre rincé. ${grindµm} µm.`},
+    {time:'Mesure',   instruction:`${dose} g de café · ${water} g d'eau filtrée (50–150 mg/L TDS).`},
+    {time:'Brassage', instruction:`Cible température ${temp}°C. Programme normal (~4 min).`},
+    {time:'Service',  instruction:'Transvaser dans un thermos isotherme préchauffé.'},
+  ]),
+  kalita: ({dose,water,temp,grindµm})=>{
+    const bloom=Math.round(dose*2.5)
+    return [
+      {time:'Avant', instruction:`Rincer le filtre Wave. ${dose} g aplati · ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Bloom : ${bloom} g à ${temp}°C en cercles. Rao spin.`},
+      {time:'0:45',  instruction:`Verser jusqu'à ${Math.round(water*0.6)} g.`},
+      {time:'1:30',  instruction:`Verser jusqu'à ${water} g (niveau mi-haut).`},
+      {time:'2:00',  instruction:'Rao spin pour aplatir le lit.'},
+      {time:'~3:00', instruction:'Fin du tirage.'},
+    ]
+  },
+  origami: ({dose,water,temp,grindµm})=>{
+    const v=Math.round(water/4)
+    return [
+      {time:'Avant', instruction:`Filtre conique V60 dans l'Origami. ${dose} g · ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Verser ${v} g à ${temp}°C.`},
+      {time:'0:30',  instruction:`Verser ${v} g (total ${v*2} g).`},
+      {time:'1:00',  instruction:`Verser ${v} g (total ${v*3} g).`},
+      {time:'1:30',  instruction:`Verser ${water-v*3} g (total ${water} g). Swirl final.`},
+      {time:'~3:00', instruction:'Fin du tirage.'},
+    ]
+  },
+  syphon: ({dose,water,temp,grindµm})=>([
+    {time:'Avant',   instruction:`Tremper le filtre tissu. ${dose} g · ${grindµm} µm.`},
+    {time:'Étape 1', instruction:`${water} g d'eau préchauffée dans la chambre basse. Brûleur allumé.`},
+    {time:'Étape 2', instruction:`Quand l'eau monte (~${temp}°C), ajouter le café. Stir 3 fois.`},
+    {time:'Étape 3', instruction:'Baisser le feu. Infuser ~60 sec. Stir doux pour briser la croûte.'},
+    {time:'Étape 4', instruction:'Éteindre. Retirer la chambre haute. Servir.'},
+  ]),
+  'cold-brew': ({dose,water,grindµm,intensity})=>{
+    const hours=intensity.id==='strong'?16:intensity.id==='mild'?12:14
+    return [
+      {time:'Étape 1', instruction:`${dose} g moulu grossier (${grindµm} µm) dans un bocal hermétique.`},
+      {time:'Étape 2', instruction:`Ajouter ${water} g d'eau froide filtrée. Remuer.`},
+      {time:'Étape 3', instruction:`Réfrigérateur ${hours} heures.`},
+      {time:'Étape 4', instruction:'Filtrer 2 fois : passoire fine puis filtre papier.'},
+      {time:'Service', instruction:'Diluer 1:1 (concentré:eau) selon l\'intensité voulue.'},
+    ]
+  },
+  turkish: ({dose,water,grindµm})=>([
+    {time:'Avant',   instruction:`Cezve cuivré. Mouture ultra-fine ${grindµm} µm (poudre).`},
+    {time:'Étape 1', instruction:`Mesurer ${water} g d'eau froide dans le cezve.`},
+    {time:'Étape 2', instruction:`Ajouter ${dose} g de café. Sucrer maintenant si désiré.`},
+    {time:'Étape 3', instruction:'Feu moyen. Stir 2-3 fois au début seulement.'},
+    {time:'Étape 4', instruction:'Surveiller la mousse. Avant débordement → retirer du feu.'},
+    {time:'Étape 5', instruction:'Répartir la mousse, remettre 10–15 sec puis verser.'},
+    {time:'Étape 6', instruction:'Attendre 2–3 min que le marc se dépose.'},
+  ]),
+}
+
+function buildGenTip({methodId,coffee,roast,profile,intensity}){
+  const parts=[]
+  if(coffee?.name) parts.push(`Optimisé pour ${coffee.name}${coffee.country?` (${coffee.country})`:''}.`)
+  if(coffee?.process) parts.push(`Process ${coffee.process}.`)
+  parts.push(`Profil ${roast.label} · ${profile.label} · ${intensity.label}.`)
+  if(roast.id==='light') parts.push("Café clair → eau plus chaude pour pousser l'extraction.")
+  if(roast.id==='dark')  parts.push('Café foncé → eau moins chaude pour limiter l\'amertume.')
+  if(intensity.id==='strong') parts.push('Ratio resserré pour intensifier le corps.')
+  if(intensity.id==='mild')   parts.push('Ratio dilué pour une tasse longue et claire.')
+  if(['fruity','citrus','floral'].includes(profile.id)) parts.push("Mouture légèrement plus fine pour révéler l'acidité.")
+  if(profile.id==='chocolate') parts.push('Mouture plus grossière pour mettre en avant le corps et le sucré.')
+  if(methodId==='cold-brew') parts.push('Filtration soignée recommandée pour une tasse limpide.')
+  return parts.join(' ')
+}
+
+function generateRecipe({methodId,coffee,roastId,profileId,intensityId,grinderId}){
+  const base=GEN_METHODS[methodId]; if(!base) return null
+  const roast    = ROAST_LEVELS.find(x=>x.id===roastId)       || ROAST_LEVELS[1]
+  const profile  = CUP_PROFILES.find(x=>x.id===profileId)     || CUP_PROFILES[0]
+  const intensity= INTENSITIES.find(x=>x.id===intensityId)    || INTENSITIES[1]
+
+  const dose=base.dose
+  const ratio=clamp(base.ratioBase+roast.ratioDelta+profile.ratioDelta+intensity.ratioDelta, 5, 22)
+  const water=Math.round(dose*ratio)
+  const grindµm=clamp(Math.round((base.grindBase+roast.grindDelta+profile.grindDelta)/5)*5, 80, 1400)
+  const temp=methodId==='cold-brew'
+    ? base.tempBase
+    : clamp(base.tempBase+roast.tempDelta+profile.tempDelta, 70, 100)
+
+  const builder=STEP_BUILDERS[methodId]||STEP_BUILDERS.v60
+  const steps=builder({dose,water,ratio,temp,grindµm,roast,profile,intensity})
+
+  const grinder=GRINDERS[grinderId]
+  const native=grinder&&grinder.label!=='— Sélectionner un moulin —'?µmToSetting(grindµm,grinder):null
+  const grindLabel=native!==null?`${grindµm} µm (${native} ${grinder.unit})`:`${grindµm} µm`
+
+  return {
+    id:`gen-${methodId}-${Date.now()}`,
+    method:methodId,
+    title:'Recette personnalisée',
+    author:coffee?.name?`Pour ${coffee.name}${coffee.country?` · ${coffee.country}`:''}`:'Générateur Torrea',
+    badge:{type:'generator',label:'✨ Générée'},
+    params:{
+      coffee:`${dose} g`,
+      water:`${water} g`,
+      ratio:`1:${ratio.toFixed(1)}`,
+      temperature:`${temp}°C`,
+      grind:grindLabel,
+      totalTime:formatTime(base.totalSec),
+    },
+    grindµm,
+    steps,
+    tip:buildGenTip({methodId,coffee,roast,profile,intensity}),
+  }
+}
+
+function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T}){
+  const [open,setOpen]=useState(false)
+  const [roast,setRoast]=useState('medium')
+  const [profile,setProfile]=useState('balanced')
+  const [intensity,setIntensity]=useState('balanced')
+  const [generated,setGenerated]=useState(null)
+
+  const onGenerate=()=>{
+    const r=generateRecipe({methodId,coffee,roastId:roast,profileId:profile,intensityId:intensity,grinderId})
+    setGenerated(r)
+  }
+
+  const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
+  const SectionLabel=({children})=>(
+    <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:8,marginTop:14}}>{children}</div>
+  )
+  const ChoiceBtn=({active,color,onClick,children})=>(
+    <button onClick={onClick} style={{
+      padding:'7px 12px',
+      border:`1px solid ${active?(color||T.gold):T.border}`,
+      background:active?`${color||T.gold}22`:T.bg,
+      color:active?(color||T.gold):T.textDim,
+      borderRadius:20,cursor:'pointer',fontSize:11,letterSpacing:'0.05em',
+      fontWeight:active?700:400,touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+    }}>{children}</button>
+  )
+
+  return (
+    <div style={{marginBottom:16,background:T.bg2,border:`1px solid ${T.gold}55`,borderRadius:10,boxShadow:`0 2px 8px ${T.shadow}`,overflow:'hidden'}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 14px',cursor:'pointer',background:`${T.gold}10`}}>
+        <div>
+          <div style={{fontSize:12,letterSpacing:'0.2em',textTransform:'uppercase',color:T.gold,fontWeight:700}}>✨ Générateur de recette</div>
+          <div style={{fontSize:10,color:T.textDim,marginTop:2}}>Recette personnalisée selon café, torréfaction, profil et intensité</div>
+        </div>
+        <div style={{fontSize:18,color:T.gold,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▾</div>
+      </div>
+
+      {open&&(
+        <div style={{padding:'4px 14px 16px'}}>
+          <SectionLabel>① Café utilisé</SectionLabel>
+          <CoffeeCard coffee={coffee} setCoffee={setCoffee} T={T}/>
+
+          <SectionLabel>② Niveau de torréfaction</SectionLabel>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {ROAST_LEVELS.map(r=>(
+              <ChoiceBtn key={r.id} active={roast===r.id} color={r.color} onClick={()=>setRoast(r.id)}>{r.label}</ChoiceBtn>
+            ))}
+          </div>
+
+          <SectionLabel>③ Profil en tasse recherché</SectionLabel>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {CUP_PROFILES.map(p=>(
+              <ChoiceBtn key={p.id} active={profile===p.id} color={T.blue} onClick={()=>setProfile(p.id)}>{p.label}</ChoiceBtn>
+            ))}
+          </div>
+
+          <SectionLabel>④ Intensité</SectionLabel>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {INTENSITIES.map(i=>(
+              <ChoiceBtn key={i.id} active={intensity===i.id} color={T.green} onClick={()=>setIntensity(i.id)}>{i.label}</ChoiceBtn>
+            ))}
+          </div>
+
+          {grinder&&(
+            <div style={{marginTop:14,fontFamily:'monospace',fontSize:10,color:T.textMute}}>
+              ⚙ Mouture convertie pour <span style={{color:T.gold}}>{grinder.label}</span>
+            </div>
+          )}
+
+          <button onClick={onGenerate} style={{
+            marginTop:14,width:'100%',padding:'13px 0',border:`1px solid ${T.gold}`,
+            background:`${T.gold}22`,color:T.gold,borderRadius:6,cursor:'pointer',
+            fontSize:13,letterSpacing:'0.18em',fontWeight:700,
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>
+            ✨ GÉNÉRER LA RECETTE
+          </button>
+        </div>
+      )}
+
+      {generated&&(
+        <div style={{padding:'4px 14px 14px'}}>
+          <RecipeCard recipe={generated} T={T} grinder={grinder}/>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TabRecettes({T,coffee,setCoffee}){
   const [active,setActive]=useState('v60')
   const [grinderId,setGrinderId]=useState('none')
   const recipes=RECIPES.filter(r=>r.method===active)
@@ -2232,6 +2539,9 @@ function TabRecettes({T}){
           <div style={{fontSize:10,color:T.textMute,marginTop:2}}>{recipes.length} recette{recipes.length>1?'s':''}</div>
         </div>
       )}
+
+      <RecipeGenerator methodId={active} coffee={coffee} setCoffee={setCoffee} grinderId={grinderId} T={T}/>
+
       {recipes.map(r=><RecipeCard key={r.id} recipe={r} T={T} grinder={grinder}/>)}
     </div>
   )
@@ -2404,6 +2714,52 @@ function TabComparateur({ T }) {
   )
 }
 
+// ─── BOUTIQUE ────────────────────────────────────────────────────────────────
+function TabBoutique({ T }) {
+  const Btn = ({ href, icon, title, subtitle, color }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={{
+      display:'block',textDecoration:'none',
+      background:T.bg2,border:`1px solid ${color}55`,borderRadius:10,
+      padding:18,marginBottom:14,cursor:'pointer',
+      boxShadow:`0 2px 12px ${T.shadow}`,
+      WebkitTapHighlightColor:'transparent',touchAction:'manipulation',
+    }}>
+      <div style={{display:'flex',alignItems:'center',gap:14}}>
+        <div style={{fontSize:32,lineHeight:1}}>{icon}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',color,fontWeight:700,marginBottom:4}}>{title}</div>
+          <div style={{fontSize:11,color:T.textDim,lineHeight:1.4}}>{subtitle}</div>
+        </div>
+        <div style={{fontSize:20,color,flexShrink:0}}>→</div>
+      </div>
+    </a>
+  )
+  return (
+    <div>
+      <div style={card(T)}>
+        <div style={SL(T)}>Boutique Torrea</div>
+        <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>
+          Découvrez notre sélection de cafés artisanaux, torréfiés en France.
+        </div>
+      </div>
+      <Btn
+        href="https://trouvons-ton-cafe-ideal.vercel.app/"
+        icon="✨"
+        title="Torrea Tailor — Blend personnalisé"
+        subtitle="Créez votre blend sur-mesure avec notre app de configuration"
+        color={T.gold}
+      />
+      <Btn
+        href="https://torrea.fr/product-category/cafe-artisanal/cafes-en-grains/cafe-pur-origine/"
+        icon="🌍"
+        title="Café pur origine"
+        subtitle="Notre sélection de cafés single-origin en grains"
+        color={T.blue}
+      />
+    </div>
+  )
+}
+
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [darkMode,setDarkMode]=useState(true)
@@ -2484,7 +2840,7 @@ export default function App() {
 
         {/* NAV PRINCIPALE */}
         <div style={{display:'flex',marginBottom:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden',boxShadow:`0 2px 8px ${T.shadow}`}}>
-          {[['calibration','⬤ Calibration'],['history',`☰ Historique (${history.length})`],['recettes','☕ Recettes'],['comparateur','⇄ Comparer']].map(([t,label])=>(
+          {[['calibration','⬤ Calibration'],['history',`☰ Historique (${history.length})`],['recettes','☕ Recettes'],['comparateur','⇄ Comparer'],['boutique','🛒 Acheter']].map(([t,label])=>(
             <button key={t} onClick={()=>setMainTab(t)} style={{flex:1,padding:'12px 0',fontFamily:'sans-serif',fontSize:11,letterSpacing:'0.18em',textTransform:'uppercase',background:mainTab===t?T.bg3:'transparent',color:mainTab===t?T.text:T.textMute,border:'none',cursor:'pointer',touchAction:'manipulation',transition:'all 0.2s',fontWeight:mainTab===t?700:400,borderBottom:mainTab===t?`2px solid ${T.gold}`:'2px solid transparent'}}>
               {label}
             </button>
@@ -2509,8 +2865,9 @@ export default function App() {
           </div>
         </div>
         {mainTab==='history'&&<TabHistory history={history} onDelete={deleteEntries} onRate={rateEntry} onApply={applyRecipe} T={T}/>}
-        {mainTab==='recettes'&&<TabRecettes T={T}/>}
+        {mainTab==='recettes'&&<TabRecettes T={T} coffee={coffee} setCoffee={setCoffee}/>}
         {mainTab==='comparateur'&&<TabComparateur T={T}/>}
+        {mainTab==='boutique'&&<TabBoutique T={T}/>}
       </div>
     </div>
   )
