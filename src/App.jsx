@@ -1174,7 +1174,7 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
     {showChart&&<GrindChartModal onClose={()=>setShowChart(false)} T={T}/>}
     {showGuide&&<GuideModal mode="moulin" onClose={()=>setShowGuide(false)} T={T}/>}
     {liveWeightOpen&&<NumPad label="Poids en tasse" unit="g" initial={liveWeight>0?liveWeight:yld} min={0} max={500} onConfirm={w=>{setLiveWeight(w);setYld(w);setLiveWeightOpen(false)}} onClose={()=>setLiveWeightOpen(false)} T={T}/>}
-    {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)}/>}
+    {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)} T={T}/>}
 
     {/* Boutons utilitaires */}
     <div style={{display:'flex',gap:8,marginBottom:16}}>
@@ -1373,16 +1373,35 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
 }
 
 // ─── EASTER EGG : COFFEE INVADERS (∞ progressive) ────────────────────────────
-function CoffeeInvaders({ onClose }) {
+const INVADERS_HISCORE_KEY = 'torrea_invaders_hiscore'
+const INVADERS_CONTROL_KEY = 'torrea_invaders_control'
+
+function CoffeeInvaders({ onClose, T }) {
   const canvasRef = useRef(null)
-  const [status, setStatus] = useState('playing')
+  const [status, setStatus] = useState('menu')
   const [finalScore, setFinalScore] = useState(0)
   const [finalWave, setFinalWave] = useState(1)
   const [gameKey, setGameKey] = useState(0)
-  const touchRef = useRef({ left:false, right:false, fire:false })
+  const [hiscore, setHiscore] = useState(() => {
+    try { const s = localStorage.getItem(INVADERS_HISCORE_KEY); return s ? JSON.parse(s) : {score:0,wave:0} } catch { return {score:0,wave:0} }
+  })
+  const [isNewRecord, setIsNewRecord] = useState(false)
+  const [controlMode, setControlMode] = useState(() => {
+    try { return localStorage.getItem(INVADERS_CONTROL_KEY) || 'buttons' } catch { return 'buttons' }
+  })
+  const touchRef = useRef({ left:false, right:false, fire:false, dragging:false, targetX:null })
+  const themeRef = useRef(T)
+  const hiscoreRef = useRef(hiscore)
+  const controlModeRef = useRef(controlMode)
+  useEffect(() => { themeRef.current = T }, [T])
+  useEffect(() => { hiscoreRef.current = hiscore }, [hiscore])
+  useEffect(() => {
+    controlModeRef.current = controlMode
+    try { localStorage.setItem(INVADERS_CONTROL_KEY, controlMode) } catch {}
+  }, [controlMode])
 
   useEffect(() => {
-    setStatus('playing')
+    if(gameKey === 0) return
     const canvas = canvasRef.current
     if(!canvas) return
     const ctx = canvas.getContext('2d')
@@ -1472,11 +1491,12 @@ function CoffeeInvaders({ onClose }) {
     }
 
     const applyPowerup = (t) => {
-      if(t === 'double') { pu.double = 540; floatText(player.x+player.w/2, player.y-10, 'DOUBLE', '#6ab4d4') }
-      else if(t === 'triple') { pu.triple = 540; floatText(player.x+player.w/2, player.y-10, 'TRIPLE', '#a88ad4') }
-      else if(t === 'rapid') { pu.rapid = 540; floatText(player.x+player.w/2, player.y-10, 'RAPID', '#d4b06a') }
-      else if(t === 'x2') { pu.x2 = 540; floatText(player.x+player.w/2, player.y-10, 'SCORE ×2', '#7acca0') }
-      else if(t === 'shield') { player.shield = 1; floatText(player.x+player.w/2, player.y-10, 'SHIELD', '#6ab4d4') }
+      const TT = themeRef.current
+      if(t === 'double') { pu.double = 540; floatText(player.x+player.w/2, player.y-10, 'DOUBLE', TT.blue) }
+      else if(t === 'triple') { pu.triple = 540; floatText(player.x+player.w/2, player.y-10, 'TRIPLE', TT.purple) }
+      else if(t === 'rapid') { pu.rapid = 540; floatText(player.x+player.w/2, player.y-10, 'RAPID', TT.gold) }
+      else if(t === 'x2') { pu.x2 = 540; floatText(player.x+player.w/2, player.y-10, 'SCORE ×2', TT.green) }
+      else if(t === 'shield') { player.shield = 1; floatText(player.x+player.w/2, player.y-10, 'SHIELD', TT.blue) }
     }
 
     const fireBullet = () => {
@@ -1501,7 +1521,22 @@ function CoffeeInvaders({ onClose }) {
     }
     const bumpCombo = () => { combo++; comboTimer = 150 }
 
-    const die = () => { alive = false; setFinalScore(score); setFinalWave(wave); setStatus('lost'); draw() }
+    const die = () => {
+      alive = false
+      setFinalScore(score)
+      setFinalWave(wave)
+      const cur = hiscoreRef.current
+      if(score > cur.score) {
+        const next = { score, wave }
+        setHiscore(next)
+        setIsNewRecord(true)
+        try { localStorage.setItem(INVADERS_HISCORE_KEY, JSON.stringify(next)) } catch {}
+      } else {
+        setIsNewRecord(false)
+      }
+      setStatus('lost')
+      draw()
+    }
 
     const keys = {}
     const onKeyDown = e => {
@@ -1523,18 +1558,25 @@ function CoffeeInvaders({ onClose }) {
       ctx.fillRect(x, y+h-3, w, 2)
     }
 
-    const enemyColors = {
-      basic:  ['#7acca0','#3a8a60'],
-      fast:   ['#a8d4f0','#3a6090'],
-      zigzag: ['#e0a878','#8a4030'],
-      tank:   ['#a888d4','#5a3088'],
-    }
-
     const draw = () => {
-      ctx.fillStyle = '#0a0a0e'
+      const TT = themeRef.current
+      const isLight = TT === LIGHT
+      const enemyColors = isLight ? {
+        basic:  ['#3a8a60','#1a4a30'],
+        fast:   ['#2a7aaa','#0a3060'],
+        zigzag: ['#aa5530','#5a2010'],
+        tank:   ['#6a4aaa','#2a0a60'],
+      } : {
+        basic:  ['#7acca0','#3a8a60'],
+        fast:   ['#a8d4f0','#3a6090'],
+        zigzag: ['#e0a878','#8a4030'],
+        tank:   ['#a888d4','#5a3088'],
+      }
+      // Background
+      ctx.fillStyle = TT.inputBg
       ctx.fillRect(0,0,W,H)
-      // Bean dust background
-      ctx.fillStyle = 'rgba(212,176,106,0.22)'
+      // Bean dust
+      ctx.fillStyle = isLight ? 'rgba(154,110,32,0.32)' : 'rgba(212,176,106,0.22)'
       for(let i=0;i<25;i++){
         const x = (i*73 + frame*0.4) % W
         const y = (i*131 + frame*0.6) % H
@@ -1544,42 +1586,40 @@ function CoffeeInvaders({ onClose }) {
       for(const e of enemies) {
         if(!e.alive) continue
         if(e.type === 'boss') {
-          // Boss: large teapot (red)
-          ctx.fillStyle = '#d47a7a'
+          ctx.fillStyle = isLight ? '#aa3a3a' : '#d47a7a'
           ctx.fillRect(e.x+10, e.y+15, e.w-20, e.h-25)
           ctx.fillRect(e.x+25, e.y+5, e.w-50, 12)
           ctx.fillRect(e.x+e.w/2-3, e.y, 6, 8)
           ctx.fillRect(e.x, e.y+25, 14, 8)
           ctx.fillRect(e.x+e.w-6, e.y+22, 6, 14)
-          ctx.fillStyle = '#3a0a0a'
+          ctx.fillStyle = isLight ? '#5a0a0a' : '#3a0a0a'
           ctx.fillRect(e.x+14, e.y+18, e.w-28, 2)
-          // HP bar above
-          ctx.fillStyle = '#1a1a24'
+          ctx.fillStyle = isLight ? '#dddded' : '#1a1a24'
           ctx.fillRect(e.x, e.y-8, e.w, 4)
-          ctx.fillStyle = e.hp/e.maxHp > 0.5 ? '#7acca0' : (e.hp/e.maxHp > 0.25 ? '#d4b06a' : '#d47a7a')
+          ctx.fillStyle = e.hp/e.maxHp > 0.5 ? TT.green : (e.hp/e.maxHp > 0.25 ? TT.gold : TT.red)
           ctx.fillRect(e.x, e.y-8, e.w*(e.hp/e.maxHp), 4)
         } else {
           const [body, liquid] = enemyColors[e.type] || enemyColors.basic
           const wob = Math.sin((frame+e.x)*0.05+e.wobble) * 1.5
           drawCup(e.x+wob, e.y, e.w, e.h, body, liquid)
           if(frame % 24 < 12) {
-            ctx.fillStyle = 'rgba(255,255,255,0.4)'
+            ctx.fillStyle = isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)'
             ctx.fillRect(e.x+wob+10, e.y-3, 2, 3)
           }
           if(e.type === 'tank') {
-            ctx.strokeStyle = '#d4b06a'
+            ctx.strokeStyle = TT.gold
             ctx.lineWidth = 1
             ctx.strokeRect(e.x+wob+1, e.y+3, e.w-2, e.h-6)
           }
         }
       }
       // Player (espresso cup)
-      drawCup(player.x, player.y, player.w, player.h, '#d4b06a', '#3a1a08')
-      ctx.fillStyle = '#c8a060'
+      drawCup(player.x, player.y, player.w, player.h, TT.gold, '#3a1a08')
+      ctx.fillStyle = isLight ? '#7a5618' : '#c8a060'
       ctx.fillRect(player.x+5, player.y+8, player.w-10, 1)
       // Shield
       if(player.shield > 0) {
-        ctx.strokeStyle = '#6ab4d4'
+        ctx.strokeStyle = TT.blue
         ctx.lineWidth = 2
         ctx.beginPath()
         ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w/2+5, 0, Math.PI*2)
@@ -1587,29 +1627,29 @@ function CoffeeInvaders({ onClose }) {
       }
       // Coffee bean bullets
       for(const b of bullets) {
-        ctx.fillStyle = '#5c3a1a'
+        ctx.fillStyle = isLight ? '#3a1a08' : '#5c3a1a'
         ctx.beginPath()
         ctx.ellipse(b.x+b.w/2, b.y+b.h/2, b.w/2, b.h/2, 0, 0, Math.PI*2)
         ctx.fill()
-        ctx.strokeStyle = '#3a1a08'
+        ctx.strokeStyle = isLight ? '#1a0a02' : '#3a1a08'
         ctx.lineWidth = 1
         ctx.beginPath()
         ctx.moveTo(b.x+b.w/2, b.y); ctx.lineTo(b.x+b.w/2, b.y+b.h)
         ctx.stroke()
       }
       // Enemy bullets
-      ctx.fillStyle = '#7acca0'
+      ctx.fillStyle = TT.green
       for(const b of enemyBullets) ctx.fillRect(b.x, b.y, b.w, b.h)
       // Power-ups
-      const puColors = { double:'#6ab4d4', triple:'#a88ad4', rapid:'#d4b06a', x2:'#7acca0', shield:'#6ab4d4' }
+      const puColors = { double:TT.blue, triple:TT.purple, rapid:TT.gold, x2:TT.green, shield:TT.blue }
       const puLabels = { double:'2', triple:'3', rapid:'R', x2:'×2', shield:'S' }
       for(const p of powerups) {
         const blink = Math.sin(p.age*0.15)*0.3+0.7
         ctx.globalAlpha = blink
-        ctx.fillStyle = puColors[p.type] || '#fff'
+        ctx.fillStyle = puColors[p.type] || TT.text
         ctx.fillRect(p.x, p.y, p.w, p.h)
         ctx.globalAlpha = 1
-        ctx.fillStyle = '#000'
+        ctx.fillStyle = isLight ? '#fff' : '#000'
         ctx.font = 'bold 9px monospace'
         const lbl = puLabels[p.type] || '?'
         const tw = ctx.measureText(lbl).width
@@ -1632,24 +1672,31 @@ function CoffeeInvaders({ onClose }) {
       }
       ctx.globalAlpha = 1
       // HUD
-      ctx.fillStyle = '#d4b06a'
+      ctx.fillStyle = TT.gold
       ctx.font = 'bold 11px monospace'
       ctx.fillText(`SCORE ${score}`, 8, 16)
       const wt = `VAGUE ${wave}`
       ctx.fillText(wt, W - ctx.measureText(wt).width - 8, 16)
+      const hs = hiscoreRef.current
+      if(hs.score > 0) {
+        ctx.fillStyle = TT.textDim
+        ctx.font = 'bold 9px monospace'
+        const ht = `BEST ${hs.score}`
+        ctx.fillText(ht, (W - ctx.measureText(ht).width)/2, 16)
+      }
       // Combo
       if(combo > 1) {
-        ctx.fillStyle = '#7acca0'
+        ctx.fillStyle = TT.green
         ctx.font = 'bold 10px monospace'
         ctx.fillText(`COMBO ×${comboMult().toFixed(2)} (${combo})`, 8, 30)
       }
       // Active power-ups
       ctx.font = 'bold 8px monospace'
       const puArr = []
-      if(pu.double > 0) puArr.push(['DOUBLE', pu.double, '#6ab4d4'])
-      if(pu.triple > 0) puArr.push(['TRIPLE', pu.triple, '#a88ad4'])
-      if(pu.rapid > 0) puArr.push(['RAPID', pu.rapid, '#d4b06a'])
-      if(pu.x2 > 0) puArr.push(['×2', pu.x2, '#7acca0'])
+      if(pu.double > 0) puArr.push(['DOUBLE', pu.double, TT.blue])
+      if(pu.triple > 0) puArr.push(['TRIPLE', pu.triple, TT.purple])
+      if(pu.rapid > 0) puArr.push(['RAPID', pu.rapid, TT.gold])
+      if(pu.x2 > 0) puArr.push(['×2', pu.x2, TT.green])
       puArr.forEach(([label, t, color], i) => {
         const x = 8 + i*68
         ctx.fillStyle = color
@@ -1658,10 +1705,12 @@ function CoffeeInvaders({ onClose }) {
       // Wave announce
       if(waveAnnounceTimer > 0) {
         const a = Math.min(1, waveAnnounceTimer/25)
-        ctx.fillStyle = `rgba(212,176,106,${a})`
+        ctx.globalAlpha = a
+        ctx.fillStyle = TT.gold
         ctx.font = 'bold 20px monospace'
         const tw = ctx.measureText(waveAnnounceText).width
         ctx.fillText(waveAnnounceText, (W-tw)/2, H/2)
+        ctx.globalAlpha = 1
       }
     }
 
@@ -1677,8 +1726,14 @@ function CoffeeInvaders({ onClose }) {
 
       // Player movement
       const t = touchRef.current
-      if(keys['arrowleft'] || keys['a'] || t.left) player.x -= player.speed
-      if(keys['arrowright'] || keys['d'] || t.right) player.x += player.speed
+      const cm = controlModeRef.current
+      if(keys['arrowleft'] || keys['a'] || (cm === 'buttons' && t.left)) player.x -= player.speed
+      if(keys['arrowright'] || keys['d'] || (cm === 'buttons' && t.right)) player.x += player.speed
+      if(cm === 'swipe' && t.dragging && t.targetX != null) {
+        const dx = t.targetX - (player.x + player.w/2)
+        const max = player.speed * 1.7
+        if(Math.abs(dx) > 0.5) player.x += Math.max(-max, Math.min(max, dx))
+      }
       player.x = Math.max(0, Math.min(W - player.w, player.x))
 
       // Shoot
@@ -1776,8 +1831,13 @@ function CoffeeInvaders({ onClose }) {
               gainScore(basePts)
               bumpCombo()
               const gained = score - before
-              floatText(e.x+e.w/2, e.y, `+${gained}`, '#d4b06a')
-              const col = (enemyColors[e.type] && enemyColors[e.type][0]) || '#d47a7a'
+              const TTk = themeRef.current
+              floatText(e.x+e.w/2, e.y, `+${gained}`, TTk.gold)
+              const isLightK = TTk === LIGHT
+              const altPalette = isLightK
+                ? { basic:'#3a8a60', fast:'#2a7aaa', zigzag:'#aa5530', tank:'#6a4aaa' }
+                : { basic:'#7acca0', fast:'#a8d4f0', zigzag:'#e0a878', tank:'#a888d4' }
+              const col = altPalette[e.type] || TTk.red
               spawnParticles(e.x+e.w/2, e.y+e.h/2, col, e.type==='boss' ? 30 : 8)
               const dropChance = e.type==='boss' ? 1 : (e.type==='tank' ? 0.25 : 0.07)
               if(Math.random() < dropChance) spawnPowerup(e.x+e.w/2, e.y+e.h/2)
@@ -1799,8 +1859,9 @@ function CoffeeInvaders({ onClose }) {
           if(player.shield > 0) {
             player.shield = 0
             b.y = H+100
-            spawnParticles(player.x+player.w/2, player.y+player.h/2, '#6ab4d4', 14)
-            floatText(player.x+player.w/2, player.y-10, 'SHIELD!', '#6ab4d4')
+            const TTs = themeRef.current
+            spawnParticles(player.x+player.w/2, player.y+player.h/2, TTs.blue, 14)
+            floatText(player.x+player.w/2, player.y-10, 'SHIELD!', TTs.blue)
           } else {
             die(); return
           }
@@ -1843,44 +1904,136 @@ function CoffeeInvaders({ onClose }) {
     }
   }, [gameKey])
 
-  const restart = () => { setStatus('playing'); setGameKey(k => k+1) }
+  const startGame = () => {
+    setIsNewRecord(false)
+    setStatus('playing')
+    setGameKey(k => k + 1)
+  }
+  const goToMenu = () => { setStatus('menu') }
   const tDown = which => () => { touchRef.current[which] = true }
   const tUp = which => () => { touchRef.current[which] = false }
 
+  const mapPointerToCanvas = (clientX) => {
+    const c = canvasRef.current
+    if(!c) return null
+    const rect = c.getBoundingClientRect()
+    return (clientX - rect.left) * (c.width / rect.width)
+  }
+  const onCanvasPointerDown = (e) => {
+    if(controlMode !== 'swipe' || status !== 'playing') return
+    e.preventDefault()
+    try { e.target.setPointerCapture(e.pointerId) } catch {}
+    touchRef.current.dragging = true
+    touchRef.current.targetX = mapPointerToCanvas(e.clientX)
+  }
+  const onCanvasPointerMove = (e) => {
+    if(!touchRef.current.dragging) return
+    touchRef.current.targetX = mapPointerToCanvas(e.clientX)
+  }
+  const onCanvasPointerUp = (e) => {
+    if(!touchRef.current.dragging) return
+    try { e.target.releasePointerCapture(e.pointerId) } catch {}
+    touchRef.current.dragging = false
+  }
+
   const W=320, H=480
-  const btn = {padding:'14px 22px',background:'#1a1a24',border:`1px solid #d4b06a55`,color:'#d4b06a',borderRadius:6,fontSize:20,touchAction:'manipulation',userSelect:'none',cursor:'pointer',WebkitTapHighlightColor:'transparent'}
-  const fireBtn = {...btn,padding:'14px 28px',background:'#d4b06a22',border:`1px solid #d4b06a`,fontSize:14,letterSpacing:'0.1em',fontWeight:700}
+  const isLight = T === LIGHT
+  const overlayBg = isLight ? 'rgba(244,244,248,0.96)' : '#000000f5'
+  const panelBg = isLight ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.82)'
+  const btn = {padding:'14px 22px',background:T.bg3,border:`1px solid ${T.gold}55`,color:T.gold,borderRadius:6,fontSize:20,touchAction:'manipulation',userSelect:'none',cursor:'pointer',WebkitTapHighlightColor:'transparent'}
+  const fireBtn = {...btn,padding:'14px 28px',background:`${T.gold}22`,border:`1px solid ${T.gold}`,fontSize:14,letterSpacing:'0.1em',fontWeight:700}
+  const modeBtn = (active) => ({
+    flex:1,padding:'14px 12px',
+    background: active ? `${T.gold}22` : T.bg3,
+    border: `2px solid ${active ? T.gold : T.border}`,
+    color: active ? T.gold : T.textDim,
+    borderRadius:8,cursor:'pointer',fontFamily:'monospace',fontSize:11,letterSpacing:'0.12em',fontWeight:700,
+    touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+    display:'flex',flexDirection:'column',alignItems:'center',gap:6,
+  })
+  const playBtn = {marginTop:6,padding:'14px 32px',background:`${T.gold}33`,border:`2px solid ${T.gold}`,color:T.gold,borderRadius:8,cursor:'pointer',fontFamily:'monospace',fontSize:14,letterSpacing:'0.2em',fontWeight:700,touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}
+  const swipeMode = controlMode === 'swipe' && status === 'playing'
 
   return (
-    <div style={{position:'fixed',inset:0,background:'#000000f5',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:14,gap:10}}>
+    <div style={{position:'fixed',inset:0,background:overlayBg,zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:14,gap:10}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',maxWidth:380}}>
-        <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,letterSpacing:'0.2em',color:'#d4b06a'}}>☕ COFFEE INVADERS</div>
-        <button onClick={onClose} style={{background:'transparent',border:`1px solid #444`,color:'#aaa',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:18,lineHeight:1,touchAction:'manipulation'}}>×</button>
+        <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,letterSpacing:'0.2em',color:T.gold}}>☕ COFFEE INVADERS</div>
+        <button onClick={onClose} style={{background:'transparent',border:`1px solid ${T.border}`,color:T.textDim,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:18,lineHeight:1,touchAction:'manipulation'}}>×</button>
       </div>
       <div style={{position:'relative'}}>
-        <canvas ref={canvasRef} width={W} height={H} style={{display:'block',background:'#0a0a0e',border:`2px solid #d4b06a44`,borderRadius:6,maxWidth:'100%',height:'auto',imageRendering:'pixelated'}}/>
+        <canvas
+          ref={canvasRef}
+          width={W}
+          height={H}
+          onPointerDown={onCanvasPointerDown}
+          onPointerMove={onCanvasPointerMove}
+          onPointerUp={onCanvasPointerUp}
+          onPointerCancel={onCanvasPointerUp}
+          style={{display:'block',background:T.inputBg,border:`2px solid ${T.gold}44`,borderRadius:6,maxWidth:'100%',height:'auto',imageRendering:'pixelated',touchAction: swipeMode ? 'none' : 'auto'}}
+        />
+        {status === 'menu' && (
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:panelBg,borderRadius:6,gap:14,padding:20}}>
+            <div style={{fontFamily:'monospace',fontSize:14,fontWeight:700,letterSpacing:'0.25em',color:T.gold,marginBottom:4}}>☕ INVADERS</div>
+            {hiscore.score > 0 ? (
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:'monospace',fontSize:9,color:T.textDim,letterSpacing:'0.2em'}}>MEILLEUR SCORE</div>
+                <div style={{fontFamily:'monospace',fontSize:26,fontWeight:700,color:T.gold,marginTop:2}}>{hiscore.score}</div>
+                <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,letterSpacing:'0.15em',marginTop:1}}>VAGUE {hiscore.wave}</div>
+              </div>
+            ) : (
+              <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,letterSpacing:'0.15em'}}>— Aucun score enregistré —</div>
+            )}
+            <div style={{fontFamily:'monospace',fontSize:9,color:T.textDim,letterSpacing:'0.2em',marginTop:6}}>CONTRÔLES</div>
+            <div style={{display:'flex',gap:10,width:'100%',maxWidth:260}}>
+              <button onClick={()=>setControlMode('buttons')} style={modeBtn(controlMode==='buttons')}>
+                <div style={{fontSize:18}}>◀ ▶</div>
+                <div>BOUTONS</div>
+              </button>
+              <button onClick={()=>setControlMode('swipe')} style={modeBtn(controlMode==='swipe')}>
+                <div style={{fontSize:18}}>✋</div>
+                <div>SWIPE</div>
+              </button>
+            </div>
+            <button onClick={startGame} style={playBtn}>▶ JOUER</button>
+          </div>
+        )}
         {status === 'lost' && (
-          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.82)',borderRadius:6,gap:10}}>
-            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,letterSpacing:'0.2em',color:'#d47a7a'}}>💥 GAME OVER</div>
-            <div style={{fontFamily:'monospace',fontSize:11,color:'#d4b06a',letterSpacing:'0.15em'}}>VAGUE ATTEINTE</div>
-            <div style={{fontFamily:'monospace',fontSize:28,fontWeight:700,color:'#d4b06a',marginTop:-4}}>{finalWave}</div>
-            <div style={{fontFamily:'monospace',fontSize:11,color:'#d4b06a',letterSpacing:'0.15em',marginTop:6}}>SCORE</div>
-            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,color:'#d4b06a',marginTop:-4}}>{finalScore}</div>
-            <button onClick={restart} style={{marginTop:8,padding:'10px 24px',background:'#d4b06a22',border:`1px solid #d4b06a`,color:'#d4b06a',borderRadius:6,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation'}}>
-              ⟲ REJOUER
-            </button>
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:panelBg,borderRadius:6,gap:8,padding:14}}>
+            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,letterSpacing:'0.2em',color:T.red}}>💥 GAME OVER</div>
+            {isNewRecord && (
+              <div style={{fontFamily:'monospace',fontSize:11,fontWeight:700,letterSpacing:'0.2em',color:T.gold,padding:'4px 12px',border:`1px solid ${T.gold}`,borderRadius:4,background:`${T.gold}22`}}>★ NOUVEAU RECORD ★</div>
+            )}
+            <div style={{fontFamily:'monospace',fontSize:11,color:T.gold,letterSpacing:'0.15em',marginTop:6}}>VAGUE ATTEINTE</div>
+            <div style={{fontFamily:'monospace',fontSize:28,fontWeight:700,color:T.gold,marginTop:-4}}>{finalWave}</div>
+            <div style={{fontFamily:'monospace',fontSize:11,color:T.gold,letterSpacing:'0.15em',marginTop:4}}>SCORE</div>
+            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,color:T.gold,marginTop:-4}}>{finalScore}</div>
+            {!isNewRecord && hiscore.score > 0 && (
+              <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,letterSpacing:'0.15em',marginTop:2}}>BEST {hiscore.score} · V{hiscore.wave}</div>
+            )}
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button onClick={goToMenu} style={{padding:'10px 18px',background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation',fontFamily:'monospace'}}>☰ MENU</button>
+              <button onClick={startGame} style={{padding:'10px 24px',background:`${T.gold}22`,border:`1px solid ${T.gold}`,color:T.gold,borderRadius:6,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation',fontFamily:'monospace'}}>⟲ REJOUER</button>
+            </div>
           </div>
         )}
       </div>
-      <div style={{display:'flex',gap:10,width:'100%',maxWidth:380,justifyContent:'space-between',alignItems:'center'}}>
-        <div style={{display:'flex',gap:6}}>
-          <button onTouchStart={tDown('left')} onTouchEnd={tUp('left')} onMouseDown={tDown('left')} onMouseUp={tUp('left')} onMouseLeave={tUp('left')} style={btn}>◀</button>
-          <button onTouchStart={tDown('right')} onTouchEnd={tUp('right')} onMouseDown={tDown('right')} onMouseUp={tUp('right')} onMouseLeave={tUp('right')} style={btn}>▶</button>
+      {status === 'playing' && (
+        <div style={{display:'flex',gap:10,width:'100%',maxWidth:380,justifyContent:'space-between',alignItems:'center'}}>
+          {controlMode === 'buttons' ? (
+            <div style={{display:'flex',gap:6}}>
+              <button onTouchStart={tDown('left')} onTouchEnd={tUp('left')} onMouseDown={tDown('left')} onMouseUp={tUp('left')} onMouseLeave={tUp('left')} style={btn}>◀</button>
+              <button onTouchStart={tDown('right')} onTouchEnd={tUp('right')} onMouseDown={tDown('right')} onMouseUp={tUp('right')} onMouseLeave={tUp('right')} style={btn}>▶</button>
+            </div>
+          ) : (
+            <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,letterSpacing:'0.1em',padding:'0 4px'}}>✋ Glisser sur l'écran</div>
+          )}
+          <button onTouchStart={tDown('fire')} onTouchEnd={tUp('fire')} onMouseDown={tDown('fire')} onMouseUp={tUp('fire')} onMouseLeave={tUp('fire')} style={fireBtn}>🫘 FIRE</button>
         </div>
-        <button onTouchStart={tDown('fire')} onTouchEnd={tUp('fire')} onMouseDown={tDown('fire')} onMouseUp={tUp('fire')} onMouseLeave={tUp('fire')} style={fireBtn}>🫘 FIRE</button>
-      </div>
-      <div style={{fontFamily:'monospace',fontSize:9,color:'#666',textAlign:'center',letterSpacing:'0.1em'}}>
-        ← → / A D · ESPACE = tirer · ÉCHAP = quitter
+      )}
+      <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,textAlign:'center',letterSpacing:'0.1em'}}>
+        {controlMode === 'swipe' && status === 'playing'
+          ? '✋ Glisser pour bouger · 🫘 = tirer · ÉCHAP = quitter'
+          : '← → / A D · ESPACE = tirer · ÉCHAP = quitter'}
       </div>
     </div>
   )
@@ -1921,7 +2074,7 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
   return (<>
     {showGuide&&<GuideModal mode="machine" onClose={()=>setShowGuide(false)} T={T}/>}
     {liveWeightOpen&&<NumPad label="Poids en tasse" unit="g" initial={liveWeight>0?liveWeight:yld} min={0} max={500} onConfirm={w=>{setLiveWeight(w);setYld(w);setLiveWeightOpen(false)}} onClose={()=>setLiveWeightOpen(false)} T={T}/>}
-    {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)}/>}
+    {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)} T={T}/>}
 
     {/* Bouton guide */}
     <div style={{marginBottom:16}}>
