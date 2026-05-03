@@ -1321,8 +1321,9 @@ function GrinderChartModal({ grinder, onClose, T }) {
 }
 
 // ─── TAB MOULIN ───────────────────────────────────────────────────────────────
-function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, notes, setNotes, portafilterType, setPortafilterType, T }) {
+function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, notes, setNotes, portafilterType, setPortafilterType, T }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
+  const [resetConfirm,setResetConfirm]=useState(false)
   const [grindValue,setGrindValue]=useState(0)
   const [showChart,setShowChart]=useState(false),[showGuide,setShowGuide]=useState(false)
   const [showGrinderChart,setShowGrinderChart]=useState(false)
@@ -1597,6 +1598,17 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
 
     {/* 7b. NOTES DE DÉGUSTATION */}
     <TastingNotes notes={notes} setNotes={setNotes} onSave={doSaveNotes} T={T}/>
+
+    {/* RESET CALIBRATION */}
+    <div style={{marginTop:8,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
+      {!resetConfirm
+        ?<button onClick={()=>{setResetConfirm(true);setTimeout(()=>setResetConfirm(false),3000)}} style={{width:'100%',padding:'11px 0',background:'transparent',border:`1px solid ${T.border}`,color:T.textMute,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.2em',touchAction:'manipulation'}}>↺ RESET CALIBRATION</button>
+        :<div style={{display:'flex',gap:8}}>
+          <button onClick={()=>setResetConfirm(false)} style={{flex:1,padding:'11px 0',background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',touchAction:'manipulation'}}>ANNULER</button>
+          <button onClick={()=>{setFeedback(null);setFlash(null);setLiveWeight(0);setResetConfirm(false);onReset()}} style={{flex:1,padding:'11px 0',background:`${T.red}22`,border:`1px solid ${T.red}`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',fontWeight:700,touchAction:'manipulation'}}>CONFIRMER RESET</button>
+        </div>
+      }
+    </div>
   </>)
 }
 
@@ -2335,8 +2347,9 @@ function MachineSelector({ machineId, setMachineId, T }) {
 }
 
 // ─── TAB MACHINE ──────────────────────────────────────────────────────────────
-function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, notes, setNotes, portafilterType, setPortafilterType, T }) {
+function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, notes, setNotes, portafilterType, setPortafilterType, T }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
+  const [resetConfirm,setResetConfirm]=useState(false)
   const [showGuide,setShowGuide]=useState(false)
   const [liveWeight,setLiveWeight]=useState(0),[liveWeightOpen,setLiveWeightOpen]=useState(false)
   const [showInvaders,setShowInvaders]=useState(false)
@@ -2543,6 +2556,17 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
         <button onClick={()=>setTemp(t=>clamp(t+1,85,96))} style={dBtn(MC,T)}>+1°C</button>
       </div>
       <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>plage 85–96°C · optimal 91–94°C</div>
+    </div>
+
+    {/* RESET CALIBRATION */}
+    <div style={{marginTop:8,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
+      {!resetConfirm
+        ?<button onClick={()=>{setResetConfirm(true);setTimeout(()=>setResetConfirm(false),3000)}} style={{width:'100%',padding:'11px 0',background:'transparent',border:`1px solid ${T.border}`,color:T.textMute,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.2em',touchAction:'manipulation'}}>↺ RESET CALIBRATION</button>
+        :<div style={{display:'flex',gap:8}}>
+          <button onClick={()=>setResetConfirm(false)} style={{flex:1,padding:'11px 0',background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',touchAction:'manipulation'}}>ANNULER</button>
+          <button onClick={()=>{setFeedback(null);setFlash(null);setLiveWeight(0);setResetConfirm(false);onReset()}} style={{flex:1,padding:'11px 0',background:`${T.red}22`,border:`1px solid ${T.red}`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',fontWeight:700,touchAction:'manipulation'}}>CONFIRMER RESET</button>
+        </div>
+      }
     </div>
   </>)
 }
@@ -3753,6 +3777,19 @@ export default function App() {
   const timerReset=()=>{setTimerRunning(false);clearInterval(timerRef.current);setTimerElapsed(0);setTime(0)}
   useEffect(()=>()=>clearInterval(timerRef.current),[])
 
+  const EMPTY_COFFEE={name:'',country:'',variety:'',profile:'',process:'',roastDate:''}
+  const EMPTY_NOTES={body:0,sweetness:0,finish:0,aromas:[]}
+  const resetMoulin=()=>{
+    setDose(18);setYld(36);timerReset()
+    setMoulinGrind(BREW_METHODS[moulinMethod]?.grindBaseµm||200)
+    setNotes(EMPTY_NOTES);setPortafilterType(null);setCoffee(EMPTY_COFFEE)
+  }
+  const resetMachine=()=>{
+    setDose(18);setYld(36);timerReset()
+    setMachineTemp(93);setMachinePreInfPct(70);setMachinePreInfSec(5)
+    setNotes(EMPTY_NOTES);setPortafilterType(null);setCoffee(EMPTY_COFFEE)
+  }
+
   return (
     <div style={{minHeight:'100vh',backgroundColor:T.bg,color:T.text,fontFamily:'sans-serif',transition:'background-color 0.3s,color 0.3s',
       backgroundImage:darkMode?`linear-gradient(${T.bg3} 1px,transparent 1px),linear-gradient(90deg,${T.bg3} 1px,transparent 1px)`:`linear-gradient(${T.bg4} 1px,transparent 1px),linear-gradient(90deg,${T.bg4} 1px,transparent 1px)`,
@@ -3794,10 +3831,10 @@ export default function App() {
 
         <div style={{display:mainTab==='calibration'?'block':'none'}}>
           <div style={{display:subTab==='moulin'?'block':'none'}}>
-            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
+            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} onReset={resetMoulin} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
           </div>
           <div style={{display:subTab==='machine'?'block':'none'}}>
-            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
+            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} onReset={resetMachine} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
           </div>
         </div>
         {mainTab==='history'&&<TabHistory history={history} onDelete={deleteEntries} onRate={rateEntry} onApply={applyRecipe} T={T}/>}
