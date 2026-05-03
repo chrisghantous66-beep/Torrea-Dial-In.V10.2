@@ -1367,7 +1367,11 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
     onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,score:result.score,coffee:{...coffee},notes:{...notes}})
     setGrind(result.newGrind)
   }
+  const doSaveNotes=()=>onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,score:result?.score??0,coffee:{...coffee},notes:{...notes}})
   const dirColor=result?.dir==='finer'?T.blue:result?.dir==='coarser'?T.orange:T.green
+  const hasConflict=result&&feedback&&feedback.taste!=='perfect'&&(
+    (result.dir==='finer'&&feedback.taste==='bitter')||(result.dir==='coarser'&&feedback.taste==='acid')
+  )
 
   return (<>
     {showChart&&<GrindChartModal onClose={()=>setShowChart(false)} T={T}/>}
@@ -1484,9 +1488,9 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
     {/* Modal chart du moulin sélectionné */}
     {showGrinderChart && g && <GrinderChartModal grinder={g} onClose={()=>setShowGrinderChart(false)} T={T}/>}
 
-    {/* 6. TIMER + RATIO LIVE */}
+    {/* 6+8. ANALYSE D'EXTRACTION — timer + score fusionnés */}
     <div style={card(T)}>
-      <div style={SL(T)}>Temps d'extraction · Ratio live</div>
+      <div style={SL(T)}>Analyse d'extraction</div>
 
       {/* Dose */}
       <div style={{marginBottom:14}}>
@@ -1547,18 +1551,18 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
       <div style={{marginTop:4}}><NumIn label="Saisie manuelle (s)" val={time} set={setTime} unit="s" min={5} max={600} color={T.textDim} T={T}/></div>
       <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>cible {formatTime(m.targetTimeMin)}–{formatTime(m.targetTimeMax)}</div>
       <Bar pct={(time/m.targetTimeMax)*100} color={time>=m.targetTimeMin&&time<=m.targetTimeMax?T.green:T.red} T={T}/>
-    </div>
-
-    {/* 7. RESSENTI EN TASSE */}
-    <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
-
-    {/* 7b. NOTES DE DÉGUSTATION */}
-    <TastingNotes notes={notes} setNotes={setNotes} T={T}/>
-
-    {/* 8. ANALYSE */}
-    {result&&(
-      <div style={card(T)}>
-        <div style={SL(T)}>Analyse</div>
+      {result&&(<>
+        <div style={{borderTop:`1px solid ${T.border}`,margin:'16px 0'}}/>
+        {hasConflict&&(
+          <div style={{background:`${T.orange}18`,border:`1px solid ${T.orange}55`,borderRadius:6,padding:'10px 12px',marginBottom:12}}>
+            <div style={{fontFamily:'monospace',fontSize:11,fontWeight:700,color:T.orange,marginBottom:4}}>⚠ Conflit détecté</div>
+            <div style={{fontFamily:'monospace',fontSize:10,color:T.textDim,lineHeight:1.5}}>
+              {result.dir==='coarser'&&feedback?.taste==='acid'
+                ?'Le ratio/temps suggère de grossir la mouture, mais le ressenti indique sous-extraction. Priorité au ressenti : vérifiez distribution et tassage avant d\'ajuster.'
+                :'Le ratio/temps suggère d\'affiner la mouture, mais le ressenti indique sur-extraction. Priorité au ressenti : vérifiez la température d\'extraction.'}
+            </div>
+          </div>
+        )}
         <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',marginBottom:14}}>
           <ScoreRing score={result.score} T={T}/>
           <div>
@@ -1570,21 +1574,29 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
         {result.isPerfect
           ?<div style={{fontSize:18,color:T.green,letterSpacing:'0.1em',fontWeight:700}}>✓ EXTRACTION PARFAITE</div>
           :<>
-            <div style={{fontSize:22,fontWeight:700,color:dirColor,textShadow:`0 0 14px ${dirColor}88`,marginBottom:8}}>
+            <div style={{fontSize:22,fontWeight:700,color:hasConflict?T.orange:dirColor,textShadow:`0 0 14px ${hasConflict?T.orange:dirColor}88`,marginBottom:8}}>
               {result.dir==='finer'?'← PLUS FIN':'→ PLUS GROSSIER'} · {result.newGrind}µm
               {clickVal!==null&&g?.clicks&&<span style={{fontSize:14,color:T.gold,marginLeft:10}}>(~{g.unit} {µmToSetting(result.newGrind,g)})</span>}
             </div>
             <div style={{fontFamily:'monospace',fontSize:11,color:T.textDim,marginBottom:10}}>
               {grind}µm → {result.newGrind}µm ({result.grindDelta>0?'+':''}{result.grindDelta}µm · {result.steps} clics)
             </div>
-            {result.reasons.map((r,i)=><div key={i} style={{fontFamily:'monospace',fontSize:10,color:T.textDim,background:T.bg,border:`1px solid ${T.border}`,padding:'3px 8px',borderRadius:3,display:'inline-block',marginRight:6,marginBottom:4}}>{r}</div>)}
-            <button onClick={applyResult} style={{marginTop:12,padding:'13px 20px',border:`1px solid ${mc}`,background:`${mc}22`,color:mc,borderRadius:4,cursor:'pointer',fontSize:13,letterSpacing:'0.1em',fontWeight:700,width:'100%',touchAction:'manipulation'}}>
-              ⬤ APPLIQUER → {result.newGrind}µm
-            </button>
+            {result.reasons.map((r,i)=>{
+              const isTime=r.includes('rapide')||r.includes('lent')
+              const explain=r.includes('rapide')?' — eau passe trop vite, mouture trop grossière':r.includes('lent')?' — eau résiste trop, mouture trop fine':''
+              return <div key={i} style={{fontFamily:'monospace',fontSize:10,color:T.textDim,background:T.bg,border:`1px solid ${T.border}`,padding:'5px 10px',borderRadius:3,display:'block',marginBottom:5}}>{r}{isTime&&<span style={{color:T.textMute}}>{explain}</span>}</div>
+            })}
+            {!hasConflict&&<button onClick={applyResult} style={{marginTop:12,padding:'13px 20px',border:`1px solid ${mc}`,background:`${mc}22`,color:mc,borderRadius:4,cursor:'pointer',fontSize:13,letterSpacing:'0.1em',fontWeight:700,width:'100%',touchAction:'manipulation'}}>⬤ APPLIQUER → {result.newGrind}µm</button>}
           </>
         }
-      </div>
-    )}
+      </>)}
+    </div>
+
+    {/* 7. RESSENTI EN TASSE */}
+    <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
+
+    {/* 7b. NOTES DE DÉGUSTATION */}
+    <TastingNotes notes={notes} setNotes={setNotes} onSave={doSaveNotes} T={T}/>
   </>)
 }
 
@@ -2284,6 +2296,23 @@ function MachineSelector({ machineId, setMachineId, T }) {
       {open&&(
         <div style={{marginTop:14}}>
           <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:10}}>Sélectionner la machine</div>
+          {/* Bouton rapide — machine générique sans pré-infusion */}
+          <button onClick={()=>{setMachineId('classic_other');setOpen(false)}} style={{
+            width:'100%',textAlign:'left',padding:'11px 14px',marginBottom:12,
+            background:machineId==='classic_other'?`${MC}22`:`${MC}0d`,
+            border:`1px solid ${machineId==='classic_other'?MC:`${MC}66`}`,
+            borderRadius:6,color:machineId==='classic_other'?MC:T.textDim,
+            cursor:'pointer',fontSize:12,touchAction:'manipulation',
+            display:'flex',alignItems:'center',gap:10,
+          }}>
+            <span style={{fontSize:18,lineHeight:1}}>☕</span>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,letterSpacing:'0.03em'}}>Autre / classique, sans Pré-Infusion</div>
+              <div style={{fontSize:9,color:machineId==='classic_other'?`${MC}99`:T.textMute,fontFamily:'monospace',marginTop:2}}>Toute machine sans pré-infusion — recommandations standard</div>
+            </div>
+            {machineId==='classic_other'&&<span style={{color:MC,fontWeight:700,fontSize:14}}>✓</span>}
+          </button>
+          <div style={{borderTop:`1px solid ${T.border}`,marginBottom:10}}/>
           {MACHINE_CATEGORIES.map(cat=>{
             const entries=Object.entries(MACHINES).filter(([,v])=>v.piType===cat.piType)
             if(!entries.length) return null
@@ -2348,6 +2377,7 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
     onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,score:result.score,coffee:{...coffee},notes:{...notes}})
     setTemp(result.newTemp);setPreInfSec(result.newPreInfSec);setPreInfPct(result.newPreInfPct)
   }
+  const doSaveNotes=()=>onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,score:result?.score??0,coffee:{...coffee},notes:{...notes}})
 
   return (<>
     {showGuide&&<GuideModal mode="machine" onClose={()=>setShowGuide(false)} T={T}/>}
@@ -2368,7 +2398,7 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
 
     <CoffeeCard coffee={coffee} setCoffee={setCoffee} T={T}/>
     <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
-    <TastingNotes notes={notes} setNotes={setNotes} T={T}/>
+    <TastingNotes notes={notes} setNotes={setNotes} onSave={doSaveNotes} T={T}/>
 
     {/* PRE-INFUSION */}
     <div style={card(T)}>
@@ -2413,9 +2443,9 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
       )}
     </div>
 
-    {/* TIMER */}
+    {/* TIMER + ANALYSE — fusionnés */}
     <div style={card(T)}>
-      <div style={SL(T)}>Temps d'extraction · Ratio live</div>
+      <div style={SL(T)}>Analyse d'extraction</div>
 
       <div style={{marginBottom:14}}>
         <NumIn label="Dose" val={dose} set={setDose} unit="g" min={5} max={40} color={MC} T={T}/>
@@ -2472,26 +2502,8 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
       <div style={{marginTop:4}}><NumIn label="Saisie manuelle (s)" val={time} set={setTime} unit="s" min={5} max={90} color={T.textDim} T={T}/></div>
       <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>cible 20–35s</div>
       <Bar pct={(time/35)*100} color={time>=20&&time<=35?T.green:T.red} T={T}/>
-    </div>
-
-    {/* TEMPÉRATURE */}
-    <div style={{...card(T),alignItems:'center'}}>
-      <div style={SL(T)}>Température d'extraction</div>
-      <Dial value={temp} range={[85,96]} color={MC} T={T}/>
-      <div style={{fontFamily:'monospace',fontSize:32,fontWeight:300,color:MC,textShadow:`0 0 22px ${MC}66`,marginTop:4,marginBottom:12}}>
-        {temp}<span style={{fontSize:13,color:T.textDim,marginLeft:4}}>°C</span>
-      </div>
-      <div style={{display:'flex',gap:8}}>
-        <button onClick={()=>setTemp(t=>clamp(t-1,85,96))} style={dBtn(MC,T)}>−1°C</button>
-        <button onClick={()=>setTemp(t=>clamp(t+1,85,96))} style={dBtn(MC,T)}>+1°C</button>
-      </div>
-      <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>plage 85–96°C · optimal 91–94°C</div>
-    </div>
-
-    {/* ANALYSE */}
-    {result&&(
-      <div style={card(T)}>
-        <div style={SL(T)}>Analyse</div>
+      {result&&(<>
+        <div style={{borderTop:`1px solid ${T.border}`,margin:'16px 0'}}/>
         <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',marginBottom:14}}>
           <ScoreRing score={result.score} T={T}/>
           <div>
@@ -2516,14 +2528,29 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
             </button>
           </>
         }
+      </>)}
+    </div>
+
+    {/* TEMPÉRATURE */}
+    <div style={{...card(T),alignItems:'center'}}>
+      <div style={SL(T)}>Température d'extraction</div>
+      <Dial value={temp} range={[85,96]} color={MC} T={T}/>
+      <div style={{fontFamily:'monospace',fontSize:32,fontWeight:300,color:MC,textShadow:`0 0 22px ${MC}66`,marginTop:4,marginBottom:12}}>
+        {temp}<span style={{fontSize:13,color:T.textDim,marginLeft:4}}>°C</span>
       </div>
-    )}
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={()=>setTemp(t=>clamp(t-1,85,96))} style={dBtn(MC,T)}>−1°C</button>
+        <button onClick={()=>setTemp(t=>clamp(t+1,85,96))} style={dBtn(MC,T)}>+1°C</button>
+      </div>
+      <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>plage 85–96°C · optimal 91–94°C</div>
+    </div>
   </>)
 }
 
 // ─── NOTES DE DÉGUSTATION ─────────────────────────────────────────────────────
-function TastingNotes({ notes, setNotes, T }) {
+function TastingNotes({ notes, setNotes, onSave, T }) {
   const [open,setOpen]=useState(false)
+  const [saved,setSaved]=useState(false)
   const n=notes||{body:0,sweetness:0,finish:0,aromas:[]}
   const has=(n.body||0)>0||(n.sweetness||0)>0||(n.finish||0)>0||(n.aromas?.length||0)>0
   const toggleAroma=a=>{
@@ -2584,6 +2611,16 @@ function TastingNotes({ notes, setNotes, T }) {
               )
             })}
           </div>
+          {onSave&&(
+            <button onClick={()=>{onSave();setSaved(true);setTimeout(()=>setSaved(false),1800)}} style={{
+              marginTop:16,width:'100%',padding:'12px 0',
+              background:saved?`${T.green}22`:`${T.gold}18`,
+              border:`1px solid ${saved?T.green:T.gold}`,
+              color:saved?T.green:T.gold,borderRadius:5,cursor:'pointer',
+              fontSize:12,letterSpacing:'0.15em',fontWeight:700,
+              touchAction:'manipulation',transition:'all 0.2s',
+            }}>{saved?'✓ SAUVEGARDÉ':'💾 SAUVEGARDER'}</button>
+          )}
         </div>
       )}
     </div>
