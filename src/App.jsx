@@ -1321,7 +1321,7 @@ function GrinderChartModal({ grinder, onClose, T }) {
 }
 
 // ─── TAB MOULIN ───────────────────────────────────────────────────────────────
-function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, notes, setNotes, T }) {
+function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, notes, setNotes, portafilterType, setPortafilterType, T }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
   const [grindValue,setGrindValue]=useState(0)
   const [showChart,setShowChart]=useState(false),[showGuide,setShowGuide]=useState(false)
@@ -1491,6 +1491,20 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
       {/* Dose */}
       <div style={{marginBottom:14}}>
         <NumIn label="Dose" val={dose} set={setDose} unit="g" min={5} max={40} color={mc} T={T}/>
+        {method==='espresso'&&(
+          <div style={{display:'flex',gap:6,marginTop:8,justifyContent:'center'}}>
+            {[['single','◉ Single'],['double','◉◉ Double']].map(([type,label])=>(
+              <button key={type} onClick={()=>setPortafilterType(portafilterType===type?null:type)} style={{
+                padding:'5px 14px',borderRadius:4,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',
+                border:`1px solid ${portafilterType===type?mc:T.border}`,
+                background:portafilterType===type?`${mc}22`:T.bg,
+                color:portafilterType===type?mc:T.textDim,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                transition:'all 0.15s',fontWeight:portafilterType===type?700:400,
+              }}>{label}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}>
@@ -2292,7 +2306,7 @@ function MachineSelector({ machineId, setMachineId, T }) {
 }
 
 // ─── TAB MACHINE ──────────────────────────────────────────────────────────────
-function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, notes, setNotes, T }) {
+function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, notes, setNotes, portafilterType, setPortafilterType, T }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
   const [showGuide,setShowGuide]=useState(false)
   const [liveWeight,setLiveWeight]=useState(0),[liveWeightOpen,setLiveWeightOpen]=useState(false)
@@ -2405,6 +2419,18 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
 
       <div style={{marginBottom:14}}>
         <NumIn label="Dose" val={dose} set={setDose} unit="g" min={5} max={40} color={MC} T={T}/>
+        <div style={{display:'flex',gap:6,marginTop:8,justifyContent:'center'}}>
+          {[['single','◉ Single'],['double','◉◉ Double']].map(([type,label])=>(
+            <button key={type} onClick={()=>setPortafilterType(portafilterType===type?null:type)} style={{
+              padding:'5px 14px',borderRadius:4,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',
+              border:`1px solid ${portafilterType===type?MC:T.border}`,
+              background:portafilterType===type?`${MC}22`:T.bg,
+              color:portafilterType===type?MC:T.textDim,
+              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              transition:'all 0.15s',fontWeight:portafilterType===type?700:400,
+            }}>{label}</button>
+          ))}
+        </div>
       </div>
 
       <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}>
@@ -3618,12 +3644,13 @@ export default function App() {
   const [machinePreInfPct,setMachinePreInfPct]=useState(_sp.machinePreInfPct||70)
   const [machinePreInfSec,setMachinePreInfSec]=useState(_sp.machinePreInfSec||5)
   const [machineId,setMachineId]=useState(()=>migrateMachineId(_sp.machineId||_sp.machineMachineType))
+  const [portafilterType,setPortafilterType]=useState(_sp.portafilterType||null)
   const [notes,setNotes]=useState(_sp.notes||{body:0,sweetness:0,finish:0,aromas:[]})
   const [history,setHistory]=useState(()=>{
     try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):[]}catch{return[]}
   })
   useEffect(()=>{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(history))}catch{}},[history])
-  useEffect(()=>{try{localStorage.setItem(PARAMS_KEY,JSON.stringify({moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,notes,dose,yld}))}catch{}},[moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,notes,dose,yld])
+  useEffect(()=>{try{localStorage.setItem(PARAMS_KEY,JSON.stringify({moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,portafilterType,notes,dose,yld}))}catch{}},[moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,portafilterType,notes,dose,yld])
 
   // Import recette via URL ?r=<base64>
   useEffect(()=>{
@@ -3730,10 +3757,10 @@ export default function App() {
 
         <div style={{display:mainTab==='calibration'?'block':'none'}}>
           <div style={{display:subTab==='moulin'?'block':'none'}}>
-            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} notes={notes} setNotes={setNotes} T={T}/>
+            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
           </div>
           <div style={{display:subTab==='machine'?'block':'none'}}>
-            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} notes={notes} setNotes={setNotes} T={T}/>
+            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
           </div>
         </div>
         {mainTab==='history'&&<TabHistory history={history} onDelete={deleteEntries} onRate={rateEntry} onApply={applyRecipe} T={T}/>}
