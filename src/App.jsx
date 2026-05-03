@@ -177,6 +177,99 @@ function formatTime(s) {
   return r > 0 ? `${m}m${String(r).padStart(2,'0')}s` : `${m}min`
 }
 
+// ─── FRAÎCHEUR DU CAFÉ ────────────────────────────────────────────────────────
+// Repères classiques (Hoffmann/SCA) : dégazage 3-7j, fenêtre optimale 7-21j,
+// déclin progressif après ~45j, stale après 90j en sachet ouvert.
+function daysSinceRoast(roastDate) {
+  if(!roastDate) return null
+  const d=new Date(roastDate); if(isNaN(d.getTime())) return null
+  const diff=Date.now()-d.getTime()
+  return Math.floor(diff/86400000)
+}
+function freshnessState(days, T) {
+  if(days===null||days===undefined) return null
+  if(days<0)  return { label:'Date future ?',          color:T.textMute, icon:'?' }
+  if(days<=3) return { label:`Trop frais (${days}j) — dégazage`, color:T.orange, icon:'⏳' }
+  if(days<=21)return { label:`Optimal (${days}j)`,     color:T.green,  icon:'✓' }
+  if(days<=45)return { label:`Bon (${days}j)`,          color:T.gold,   icon:'•' }
+  if(days<=90)return { label:`Vieillissant (${days}j)`, color:T.orange, icon:'!' }
+  return        { label:`Stale (${days}j)`,             color:T.red,    icon:'✕' }
+}
+
+// ─── ARÔMES ───────────────────────────────────────────────────────────────────
+// Roue aromatique simplifiée (15 descripteurs)
+const AROMAS = [
+  'Chocolat','Caramel','Noisette','Vanille',
+  'Fruits rouges','Agrumes','Fruits jaunes','Fruits secs',
+  'Floral','Miel','Épicé','Boisé',
+  'Tabac','Malt','Vert/herbacé',
+]
+
+// ─── PARTAGE / EXPORT ─────────────────────────────────────────────────────────
+function encB64(s){
+  try{return btoa(String.fromCharCode(...new TextEncoder().encode(s)))}catch{return ''}
+}
+function decB64(s){
+  try{return new TextDecoder().decode(Uint8Array.from(atob(s),c=>c.charCodeAt(0)))}catch{return ''}
+}
+// Encode minimal recipe payload (clés courtes pour QR plus dense)
+function encodeRecipe(e){
+  const p={
+    m:e.mode, d:e.dose, y:e.yld, t:e.time, te:e.temp,
+    pp:e.preInfPct, ps:e.preInfSec, mi:e.machineId,
+    me:e.method, gr:e.grind, gi:e.grinderId,
+    ta:e.taste, sc:e.score, no:e.notes,
+    co:e.coffee?{n:e.coffee.name,c:e.coffee.country,v:e.coffee.variety,pr:e.coffee.process,pf:e.coffee.profile,r:e.coffee.roastDate}:undefined,
+  }
+  Object.keys(p).forEach(k=>p[k]===undefined&&delete p[k])
+  return encB64(JSON.stringify(p))
+}
+function decodeRecipe(s){
+  const j=decB64(s); if(!j)return null
+  try{
+    const p=JSON.parse(j)
+    return {
+      mode:p.m, dose:p.d, yld:p.y, time:p.t, temp:p.te,
+      preInfPct:p.pp, preInfSec:p.ps, machineId:p.mi,
+      method:p.me, grind:p.gr, grinderId:p.gi,
+      taste:p.ta, score:p.sc, notes:p.no,
+      coffee:p.co?{name:p.co.n||'',country:p.co.c||'',variety:p.co.v||'',process:p.co.pr||'',profile:p.co.pf||'',roastDate:p.co.r||''}:undefined,
+    }
+  }catch{return null}
+}
+function recipeShareUrl(e){
+  const base=typeof window!=='undefined'?window.location.origin+window.location.pathname:''
+  return `${base}?r=${encodeRecipe(e)}`
+}
+
+// ─── ANALYTICS HELPERS ────────────────────────────────────────────────────────
+function analyzeHistory(history){
+  if(!history.length) return null
+  const total=history.length
+  const withScore=history.filter(h=>typeof h.score==='number')
+  const avgScore=withScore.length?Math.round(withScore.reduce((a,h)=>a+h.score,0)/withScore.length):0
+  const perfect=history.filter(h=>h.taste==='perfect').length
+  const perfectPct=Math.round(perfect/total*100)
+  const byMode={moulin:0,machine:0}
+  const byMethod={}
+  const byCoffee={}
+  history.forEach(h=>{
+    byMode[h.mode]=(byMode[h.mode]||0)+1
+    if(h.method)byMethod[h.method]=(byMethod[h.method]||0)+1
+    const cn=h.coffee?.name?.trim()
+    if(cn){
+      const c=byCoffee[cn]||{count:0,bestScore:0,bestEntry:null,grinds:{}}
+      c.count++
+      if((h.score||0)>c.bestScore){c.bestScore=h.score||0;c.bestEntry=h}
+      if(h.grind){c.grinds[h.grind]=(c.grinds[h.grind]||0)+1}
+      byCoffee[cn]=c
+    }
+  })
+  // Series par ordre chronologique (du plus ancien au plus récent)
+  const series=withScore.slice().reverse().map((h,i)=>({i,score:h.score,mode:h.mode,id:h.id}))
+  return { total, avgScore, perfect, perfectPct, byMode, byMethod, byCoffee, series }
+}
+
 // Convert µm value to native grinder setting
 function µmToSetting(µm, g) {
   if (!g || g.label === '— Sélectionner un moulin —' || !g.clicks || !g.minµm) return null
@@ -689,7 +782,8 @@ function CoffeeCard({ coffee, setCoffee, T }) {
     {key:'profile',label:'Profil aromatique',placeholder:'ex: Agrumes, Jasmin, Miel'},
     {key:'process',label:'Process',          placeholder:'ex: Lavé, Naturel, Honey'},
   ]
-  const has=Object.values(coffee).some(v=>v.trim()!=='')
+  const has=Object.entries(coffee).some(([k,v])=>k!=='roastDate'&&typeof v==='string'&&v.trim()!=='')
+  const fresh=freshnessState(daysSinceRoast(coffee.roastDate),T)
 
   const saveCoffee=()=>{
     if(!coffee.name.trim())return
@@ -704,7 +798,7 @@ function CoffeeCard({ coffee, setCoffee, T }) {
     try{localStorage.setItem(COFFEE_LIB_KEY,JSON.stringify(updated))}catch{}
   }
   const selectCoffee=(c)=>{
-    setCoffee({name:c.name||'',country:c.country||'',variety:c.variety||'',profile:c.profile||'',process:c.process||''})
+    setCoffee({name:c.name||'',country:c.country||'',variety:c.variety||'',profile:c.profile||'',process:c.process||'',roastDate:c.roastDate||''})
     setShowLib(false)
   }
 
@@ -754,16 +848,31 @@ function CoffeeCard({ coffee, setCoffee, T }) {
           <div style={{fontSize:18,color:T.textMute,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',lineHeight:1}}>▾</div>
         </div>
       </div>
-      {!open&&has&&<div style={{fontFamily:'monospace',fontSize:11,color:T.gold,marginTop:8}}>{coffee.name||'—'}{coffee.country?` · ${coffee.country}`:''}{coffee.process?` · ${coffee.process}`:''}</div>}
+      {!open&&has&&(
+        <div style={{marginTop:8}}>
+          <div style={{fontFamily:'monospace',fontSize:11,color:T.gold}}>{coffee.name||'—'}{coffee.country?` · ${coffee.country}`:''}{coffee.process?` · ${coffee.process}`:''}</div>
+          {fresh&&<div style={{display:'inline-block',marginTop:6,padding:'2px 8px',background:`${fresh.color}18`,border:`1px solid ${fresh.color}66`,borderRadius:10,fontFamily:'monospace',fontSize:10,color:fresh.color}}>{fresh.icon} {fresh.label}</div>}
+        </div>
+      )}
       {open&&(
         <div style={{display:'flex',flexDirection:'column',gap:12,marginTop:14}}>
           {fields.map(({key,label,placeholder})=>(
             <div key={key}>
               <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:5}}>{label}</div>
-              <input value={coffee[key]} onChange={e=>setCoffee(c=>({...c,[key]:e.target.value}))} placeholder={placeholder}
+              <input value={coffee[key]||''} onChange={e=>setCoffee(c=>({...c,[key]:e.target.value}))} placeholder={placeholder}
                 style={{width:'100%',padding:'9px 12px',background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:4,color:T.text,fontFamily:'monospace',fontSize:13,outline:'none',WebkitAppearance:'none'}}/>
             </div>
           ))}
+          {/* Date de torréfaction + fraîcheur */}
+          <div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
+              <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase'}}>Date de torréfaction</div>
+              {fresh&&<span style={{fontFamily:'monospace',fontSize:10,color:fresh.color,fontWeight:700}}>{fresh.icon} {fresh.label}</span>}
+            </div>
+            <input type="date" value={coffee.roastDate||''} onChange={e=>setCoffee(c=>({...c,roastDate:e.target.value}))}
+              style={{width:'100%',padding:'9px 12px',background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:4,color:T.text,fontFamily:'monospace',fontSize:13,outline:'none',WebkitAppearance:'none',colorScheme:T===DARK?'dark':'light'}}/>
+            <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,marginTop:4}}>Fenêtre optimale : 7–21 jours après torréfaction</div>
+          </div>
           {has&&(
             <button onClick={saveCoffee} style={{padding:'10px 0',background:`${T.gold}18`,border:`1px solid ${T.gold}66`,color:T.gold,borderRadius:4,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation'}}>
               💾 SAUVEGARDER CE CAFÉ
@@ -1162,7 +1271,7 @@ function GrinderChartModal({ grinder, onClose, T }) {
 }
 
 // ─── TAB MOULIN ───────────────────────────────────────────────────────────────
-function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, T }) {
+function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, notes, setNotes, T }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
   const [grindValue,setGrindValue]=useState(0)
   const [showChart,setShowChart]=useState(false),[showGuide,setShowGuide]=useState(false)
@@ -1200,12 +1309,12 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
   const doTaste=taste=>{
     const fb=computeTasteGrind({taste,method,doseG:dose,yieldG:yld,currentGrindµm:grind},T)
     if(!fb)return;setFlash(taste);setTimeout(()=>setFlash(null),1000);setFeedback(fb)
-    onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,taste,score:taste==='perfect'?100:(result?.score??0),coffee:{...coffee}})
+    onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,taste,score:taste==='perfect'?100:(result?.score??0),coffee:{...coffee},notes:{...notes}})
     if(taste!=='perfect'){setGrind(fb.newGrind);if(fb.newYield!==yld)setYld(fb.newYield)}
   }
   const applyResult=()=>{
     if(!result)return
-    onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,score:result.score,coffee:{...coffee}})
+    onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,score:result.score,coffee:{...coffee},notes:{...notes}})
     setGrind(result.newGrind)
   }
   const dirColor=result?.dir==='finer'?T.blue:result?.dir==='coarser'?T.orange:T.green
@@ -1378,6 +1487,9 @@ function TabMoulin({ coffee, setCoffee, onSave, history, dose, setDose, yld, set
 
     {/* 7. RESSENTI EN TASSE */}
     <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
+
+    {/* 7b. NOTES DE DÉGUSTATION */}
+    <TastingNotes notes={notes} setNotes={setNotes} T={T}/>
 
     {/* 8. ANALYSE */}
     {result&&(
@@ -2130,7 +2242,7 @@ function MachineSelector({ machineId, setMachineId, T }) {
 }
 
 // ─── TAB MACHINE ──────────────────────────────────────────────────────────────
-function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, T }) {
+function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, notes, setNotes, T }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
   const [showGuide,setShowGuide]=useState(false)
   const [liveWeight,setLiveWeight]=useState(0),[liveWeightOpen,setLiveWeightOpen]=useState(false)
@@ -2164,12 +2276,12 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
   const doTaste=taste=>{
     const fb=computeTasteMachine({taste,tempC:temp,preInfPct,preInfSec,yieldG:yld,piType},T)
     if(!fb)return;setFlash(taste);setTimeout(()=>setFlash(null),1000);setFeedback(fb)
-    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,taste,score:taste==='perfect'?100:(result?.score??0),coffee:{...coffee}})
+    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,taste,score:taste==='perfect'?100:(result?.score??0),coffee:{...coffee},notes:{...notes}})
     if(taste!=='perfect'){setTemp(fb.newTemp);setPreInfPct(fb.newPreInfPct);setPreInfSec(fb.newPreInfSec)}
   }
   const applyResult=()=>{
     if(!result)return
-    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,score:result.score,coffee:{...coffee}})
+    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,score:result.score,coffee:{...coffee},notes:{...notes}})
     setTemp(result.newTemp);setPreInfSec(result.newPreInfSec);setPreInfPct(result.newPreInfPct)
   }
 
@@ -2192,6 +2304,7 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
 
     <CoffeeCard coffee={coffee} setCoffee={setCoffee} T={T}/>
     <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
+    <TastingNotes notes={notes} setNotes={setNotes} T={T}/>
 
     {/* PRE-INFUSION */}
     <div style={card(T)}>
@@ -2332,6 +2445,282 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
   </>)
 }
 
+// ─── NOTES DE DÉGUSTATION ─────────────────────────────────────────────────────
+function TastingNotes({ notes, setNotes, T }) {
+  const [open,setOpen]=useState(false)
+  const n=notes||{body:0,sweetness:0,finish:0,aromas:[]}
+  const has=(n.body||0)>0||(n.sweetness||0)>0||(n.finish||0)>0||(n.aromas?.length||0)>0
+  const toggleAroma=a=>{
+    const cur=n.aromas||[]
+    const next=cur.includes(a)?cur.filter(x=>x!==a):[...cur,a]
+    setNotes({...n,aromas:next})
+  }
+  const Slider=({label,value,onChange,color})=>(
+    <div style={{marginBottom:10}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+        <span style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase'}}>{label}</span>
+        <span style={{fontFamily:'monospace',fontSize:11,color:value>0?color:T.textMute,fontWeight:700}}>{value}/5</span>
+      </div>
+      <div style={{display:'flex',gap:4}}>
+        {[1,2,3,4,5].map(v=>(
+          <button key={v} onClick={()=>onChange(value===v?0:v)} style={{
+            flex:1,padding:'8px 0',borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'monospace',fontWeight:700,
+            border:`1px solid ${value>=v?color:T.border}`,
+            background:value>=v?`${color}22`:T.bg3,
+            color:value>=v?color:T.textMute,
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>{v}</button>
+        ))}
+      </div>
+    </div>
+  )
+  return (
+    <div style={card(T)}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{...SL(T),marginBottom:0}}>👅 Notes de dégustation {has&&<span style={{color:T.gold,marginLeft:4}}>●</span>}</div>
+        <div style={{fontSize:18,color:T.textMute,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',lineHeight:1}}>▾</div>
+      </div>
+      {!open&&has&&(
+        <div style={{marginTop:8,fontFamily:'monospace',fontSize:11,color:T.textDim}}>
+          {n.body>0&&<span>Corps {n.body}/5 · </span>}
+          {n.sweetness>0&&<span>Sucrosité {n.sweetness}/5 · </span>}
+          {n.finish>0&&<span>Finale {n.finish}/5</span>}
+          {n.aromas?.length>0&&<div style={{marginTop:4,color:T.gold}}>{n.aromas.join(', ')}</div>}
+        </div>
+      )}
+      {open&&(
+        <div style={{marginTop:14}}>
+          <Slider label="Corps"      value={n.body||0}      onChange={v=>setNotes({...n,body:v})}      color={T.purple}/>
+          <Slider label="Sucrosité"  value={n.sweetness||0} onChange={v=>setNotes({...n,sweetness:v})} color={T.green}/>
+          <Slider label="Finale"     value={n.finish||0}    onChange={v=>setNotes({...n,finish:v})}    color={T.blue}/>
+          <div style={{marginTop:14,fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:8}}>Arômes</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {AROMAS.map(a=>{
+              const sel=(n.aromas||[]).includes(a)
+              return (
+                <button key={a} onClick={()=>toggleAroma(a)} style={{
+                  padding:'5px 10px',borderRadius:14,cursor:'pointer',fontSize:11,fontFamily:'monospace',
+                  border:`1px solid ${sel?T.gold:T.border}`,
+                  background:sel?`${T.gold}22`:T.bg3,
+                  color:sel?T.gold:T.textDim,
+                  touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                }}>{a}</button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── PARTAGE / EXPORT MODAL ───────────────────────────────────────────────────
+function ShareModal({ entry, onClose, T }){
+  const url=recipeShareUrl(entry)
+  const [copied,setCopied]=useState(false)
+  const qr=`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`
+  const copy=async()=>{
+    try{await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{}
+  }
+  const summary=[
+    entry.coffee?.name?`☕ ${entry.coffee.name}`:null,
+    entry.mode==='moulin'?`⚙ ${entry.method||''} · mouture ${entry.grind||'-'}µm`:null,
+    entry.mode==='machine'?`☕ ${entry.dose||'-'}g → ${entry.yld||'-'}g · ${entry.time||'-'}s · ${entry.temp||'-'}°C`:null,
+    typeof entry.score==='number'?`Score ${entry.score}/100`:null,
+  ].filter(Boolean).join('  ·  ')
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:420,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:12,padding:'20px 18px',boxShadow:`0 8px 32px ${T.shadow}`}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontSize:12,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700}}>📤 Partager la recette</div>
+          <button onClick={onClose} style={{background:'none',border:'none',color:T.textMute,fontSize:20,cursor:'pointer',padding:'0 4px'}}>✕</button>
+        </div>
+        <div style={{fontFamily:'monospace',fontSize:11,color:T.textDim,marginBottom:14,lineHeight:1.5}}>{summary}</div>
+        <div style={{display:'flex',justifyContent:'center',marginBottom:14}}>
+          <div style={{padding:8,background:'#fff',borderRadius:8}}>
+            <img src={qr} width={200} height={200} alt="QR code" onError={e=>{e.target.style.display='none'}} style={{display:'block'}}/>
+          </div>
+        </div>
+        <div style={{fontSize:9,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:6}}>Lien</div>
+        <div style={{fontFamily:'monospace',fontSize:10,color:T.textDim,background:T.bg3,border:`1px solid ${T.border}`,borderRadius:4,padding:'8px 10px',marginBottom:10,wordBreak:'break-all',maxHeight:80,overflowY:'auto'}}>{url}</div>
+        <button onClick={copy} style={{width:'100%',padding:'12px 0',background:copied?`${T.green}22`:`${T.gold}22`,border:`1px solid ${copied?T.green:T.gold}`,color:copied?T.green:T.gold,borderRadius:4,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation'}}>
+          {copied?'✓ COPIÉ':'📋 COPIER LE LIEN'}
+        </button>
+        <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,marginTop:10,textAlign:'center'}}>Hors-ligne : copie le lien · QR généré en ligne</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── A/B COMPARE MODAL ────────────────────────────────────────────────────────
+function CompareModal({ a, b, onClose, T }){
+  const Row=({label,va,vb,unit=''})=>{
+    if(va==null&&vb==null)return null
+    const same=va===vb
+    return (
+      <div style={{display:'grid',gridTemplateColumns:'1fr 90px 90px',gap:6,padding:'7px 0',borderBottom:`1px solid ${T.border}`,alignItems:'center'}}>
+        <div style={{fontSize:10,letterSpacing:'0.15em',color:T.textMute,textTransform:'uppercase'}}>{label}</div>
+        <div style={{fontFamily:'monospace',fontSize:13,color:same?T.textDim:T.gold,textAlign:'right',fontWeight:same?400:700}}>{va??'—'}{va!=null?unit:''}</div>
+        <div style={{fontFamily:'monospace',fontSize:13,color:same?T.textDim:T.blue,textAlign:'right',fontWeight:same?400:700}}>{vb??'—'}{vb!=null?unit:''}</div>
+      </div>
+    )
+  }
+  const winner=(a.score||0)===(b.score||0)?null:(a.score||0)>(b.score||0)?'A':'B'
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:480,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:12,padding:'20px 18px',boxShadow:`0 8px 32px ${T.shadow}`,maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontSize:12,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700}}>⇄ Comparaison A/B</div>
+          <button onClick={onClose} style={{background:'none',border:'none',color:T.textMute,fontSize:20,cursor:'pointer',padding:'0 4px'}}>✕</button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 90px 90px',gap:6,marginBottom:8}}>
+          <div></div>
+          <div style={{textAlign:'right',fontSize:10,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700}}>A {winner==='A'&&'🏆'}</div>
+          <div style={{textAlign:'right',fontSize:10,letterSpacing:'0.2em',color:T.blue,textTransform:'uppercase',fontWeight:700}}>B {winner==='B'&&'🏆'}</div>
+        </div>
+        <Row label="Mode"     va={a.mode}    vb={b.mode}/>
+        <Row label="Café"     va={a.coffee?.name||'—'}     vb={b.coffee?.name||'—'}/>
+        <Row label="Méthode"  va={a.method||'—'}           vb={b.method||'—'}/>
+        <Row label="Dose"     va={a.dose}    vb={b.dose}    unit="g"/>
+        <Row label="Yield"    va={a.yld}     vb={b.yld}     unit="g"/>
+        <Row label="Ratio"    va={a.dose&&a.yld?(a.yld/a.dose).toFixed(2):null} vb={b.dose&&b.yld?(b.yld/b.dose).toFixed(2):null}/>
+        <Row label="Temps"    va={a.time}    vb={b.time}    unit="s"/>
+        <Row label="Temp."    va={a.temp}    vb={b.temp}    unit="°C"/>
+        <Row label="Pre-Inf"  va={a.preInfSec?`${a.preInfSec}s/${a.preInfPct}%`:null} vb={b.preInfSec?`${b.preInfSec}s/${b.preInfPct}%`:null}/>
+        <Row label="Mouture"  va={a.grind}   vb={b.grind}   unit="µm"/>
+        <Row label="Score"    va={a.score}   vb={b.score}   unit="/100"/>
+        <Row label="Goût"     va={a.taste||'—'}  vb={b.taste||'—'}/>
+        <Row label="Corps"    va={a.notes?.body||null}      vb={b.notes?.body||null}      unit="/5"/>
+        <Row label="Sucrosité"  va={a.notes?.sweetness||null} vb={b.notes?.sweetness||null} unit="/5"/>
+        <Row label="Finale"   va={a.notes?.finish||null}    vb={b.notes?.finish||null}    unit="/5"/>
+        {(a.notes?.aromas?.length||b.notes?.aromas?.length)>0&&(
+          <div style={{padding:'8px 0',fontFamily:'monospace',fontSize:10,color:T.textDim}}>
+            <div><span style={{color:T.gold}}>A —</span> {a.notes?.aromas?.join(', ')||'—'}</div>
+            <div style={{marginTop:4}}><span style={{color:T.blue}}>B —</span> {b.notes?.aromas?.join(', ')||'—'}</div>
+          </div>
+        )}
+        {winner&&<div style={{marginTop:14,padding:10,background:`${T.green}15`,border:`1px solid ${T.green}66`,borderRadius:6,fontFamily:'monospace',fontSize:12,color:T.green,textAlign:'center'}}>🏆 Shot {winner} gagne (+{Math.abs((a.score||0)-(b.score||0))} pts)</div>}
+      </div>
+    </div>
+  )
+}
+
+// ─── ANALYTICS / DASHBOARD ────────────────────────────────────────────────────
+function TabAnalytics({ history, T }){
+  const stats=analyzeHistory(history)
+  if(!stats||!stats.total){
+    return <div style={{textAlign:'center',color:T.textMute,padding:48,fontSize:13}}>Pas encore de données — sauvegarde quelques shots pour voir les tendances.</div>
+  }
+  const { total, avgScore, perfectPct, byMode, byMethod, byCoffee, series }=stats
+  const mColors={espresso:T.gold,filter:T.blue,aeropress:T.green,chemex:T.purple,moka:T.orange,machine:MC,moulin:T.gold}
+
+  // SVG line chart
+  const W=440, H=120, P=8
+  const xs=series.length>1?series.map((_,i)=>P+i*((W-2*P)/(series.length-1))):[W/2]
+  const ys=series.map(s=>H-P-(s.score/100)*(H-2*P))
+  const path=series.length?xs.map((x,i)=>`${i===0?'M':'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' '):''
+  const area=series.length>1?`${path} L${xs[xs.length-1]},${H-P} L${xs[0]},${H-P} Z`:''
+
+  const sortedCoffees=Object.entries(byCoffee).sort((a,b)=>b[1].bestScore-a[1].bestScore).slice(0,8)
+  const methodEntries=Object.entries(byMethod).sort((a,b)=>b[1]-a[1])
+  const maxMethod=Math.max(1,...methodEntries.map(([,n])=>n))
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{padding:'12px 16px',background:`${T.gold}12`,border:`1px solid ${T.gold}44`,borderRadius:8}}>
+        <div style={{fontSize:12,fontWeight:700,color:T.gold,letterSpacing:'0.15em',textTransform:'uppercase',marginBottom:4}}>📊 Analytics</div>
+        <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>Tendances et progression sur l'ensemble de tes shots sauvegardés.</div>
+      </div>
+
+      {/* KPI cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
+        {[
+          {label:'Shots',value:total,color:T.gold},
+          {label:'Score moyen',value:avgScore,suffix:'/100',color:avgScore>=85?T.green:avgScore>=70?T.gold:T.orange},
+          {label:'% Parfaits',value:perfectPct,suffix:'%',color:T.green},
+        ].map((k,i)=>(
+          <div key={i} style={{padding:'14px 10px',background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,textAlign:'center',boxShadow:`0 2px 8px ${T.shadow}`}}>
+            <div style={{fontSize:9,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:6}}>{k.label}</div>
+            <div style={{fontFamily:'monospace',fontSize:24,fontWeight:300,color:k.color,lineHeight:1}}>{k.value}<span style={{fontSize:11,color:T.textDim,marginLeft:2}}>{k.suffix||''}</span></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Score over time */}
+      <div style={{padding:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,boxShadow:`0 2px 8px ${T.shadow}`}}>
+        <div style={{...SL(T)}}>📈 Score dans le temps ({series.length} shots scorés)</div>
+        {series.length<2?(
+          <div style={{padding:30,textAlign:'center',color:T.textMute,fontSize:12}}>Au moins 2 shots scorés requis</div>
+        ):(
+          <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{marginTop:6}}>
+            {[25,50,75].map(y=>(
+              <line key={y} x1={P} x2={W-P} y1={H-P-(y/100)*(H-2*P)} y2={H-P-(y/100)*(H-2*P)} stroke={T.border} strokeDasharray="3 3"/>
+            ))}
+            <line x1={P} x2={W-P} y1={H-P-(90/100)*(H-2*P)} y2={H-P-(90/100)*(H-2*P)} stroke={T.green} strokeOpacity="0.4" strokeDasharray="4 2"/>
+            <path d={area} fill={T.gold} fillOpacity="0.12"/>
+            <path d={path} fill="none" stroke={T.gold} strokeWidth="2"/>
+            {xs.map((x,i)=>(
+              <circle key={i} cx={x} cy={ys[i]} r="3" fill={mColors[series[i].mode]||T.gold} stroke={T.bg2} strokeWidth="1.5"/>
+            ))}
+          </svg>
+        )}
+        <div style={{display:'flex',justifyContent:'space-between',fontFamily:'monospace',fontSize:9,color:T.textMute,marginTop:4}}>
+          <span>← Plus ancien</span><span style={{color:T.green}}>seuil parfait 90+</span><span>Récent →</span>
+        </div>
+      </div>
+
+      {/* Méthodes */}
+      {methodEntries.length>0&&(
+        <div style={{padding:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,boxShadow:`0 2px 8px ${T.shadow}`}}>
+          <div style={SL(T)}>⚙ Shots par méthode</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:6}}>
+            {methodEntries.map(([m,n])=>{
+              const c=mColors[m]||T.gold
+              const pct=Math.round(n/maxMethod*100)
+              return (
+                <div key={m}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                    <span style={{fontFamily:'monospace',fontSize:11,color:c,fontWeight:700,textTransform:'uppercase'}}>{m}</span>
+                    <span style={{fontFamily:'monospace',fontSize:10,color:T.textMute}}>{n} shot{n>1?'s':''}</span>
+                  </div>
+                  <div style={{height:6,background:T.bg3,borderRadius:3,overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${pct}%`,background:c,borderRadius:3}}/>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:10,paddingTop:10,borderTop:`1px solid ${T.border}`,fontFamily:'monospace',fontSize:10,color:T.textMute}}>
+            <span>⚙ Moulin · {byMode.moulin||0}</span>
+            <span>☕ Machine · {byMode.machine||0}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Top cafés */}
+      {sortedCoffees.length>0&&(
+        <div style={{padding:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,boxShadow:`0 2px 8px ${T.shadow}`}}>
+          <div style={SL(T)}>☕ Meilleurs scores par café</div>
+          <div style={{display:'flex',flexDirection:'column',gap:6,marginTop:6}}>
+            {sortedCoffees.map(([name,c])=>{
+              const bestGrind=Object.entries(c.grinds||{}).sort((a,b)=>b[1]-a[1])[0]?.[0]
+              return (
+                <div key={name} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 10px',background:T.bg3,border:`1px solid ${T.border}`,borderRadius:5}}>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{fontFamily:'monospace',fontSize:12,color:T.gold,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{name}</div>
+                    <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:2}}>{c.count} shot{c.count>1?'s':''}{bestGrind?` · mouture top ${bestGrind}µm`:''}</div>
+                  </div>
+                  <div style={{fontFamily:'monospace',fontSize:14,fontWeight:700,color:c.bestScore>=90?T.green:c.bestScore>=70?T.gold:T.orange,marginLeft:10}}>{c.bestScore}<span style={{fontSize:9,color:T.textMute}}>/100</span></div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── HISTORIQUE ───────────────────────────────────────────────────────────────
 function StarRating({ rating=0, onRate, T }) {
   const [hover,setHover]=useState(0)
@@ -2351,16 +2740,32 @@ function StarRating({ rating=0, onRate, T }) {
 
 function TabHistory({ history, onDelete, onRate, onApply, T }) {
   const [selected,setSelected]=useState(new Set())
+  const [shareEntry,setShareEntry]=useState(null)
+  const [compare,setCompare]=useState(null)
   const toggle=id=>setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})
   const deleteSelected=()=>{onDelete([...selected]);setSelected(new Set())}
+  const compareSelected=()=>{
+    const ids=[...selected]
+    if(ids.length!==2)return
+    const a=history.find(h=>h.id===ids[0]); const b=history.find(h=>h.id===ids[1])
+    if(a&&b){
+      const [first,second]=a.id<b.id?[a,b]:[b,a]
+      setCompare({a:first,b:second})
+    }
+  }
   const mColors={espresso:T.gold,filter:T.blue,aeropress:T.green,chemex:T.purple,moka:T.orange}
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {shareEntry&&<ShareModal entry={shareEntry} onClose={()=>setShareEntry(null)} T={T}/>}
+      {compare&&<CompareModal a={compare.a} b={compare.b} onClose={()=>setCompare(null)} T={T}/>}
       {selected.size>0&&(
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background:`${T.red}15`,border:`1px solid ${T.red}55`,borderRadius:6,marginBottom:4}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,padding:'10px 14px',background:`${T.red}15`,border:`1px solid ${T.red}55`,borderRadius:6,marginBottom:4,flexWrap:'wrap'}}>
           <span style={{fontSize:13,color:T.text,fontWeight:600}}>{selected.size} sélectionné{selected.size>1?'s':''}</span>
-          <button onClick={deleteSelected} style={{padding:'7px 18px',background:T.red,border:'none',color:'#fff',borderRadius:4,cursor:'pointer',fontSize:12,fontWeight:700,letterSpacing:'0.1em',touchAction:'manipulation'}}>🗑 Supprimer</button>
+          <div style={{display:'flex',gap:6}}>
+            {selected.size===2&&<button onClick={compareSelected} style={{padding:'7px 14px',background:T.blue,border:'none',color:'#fff',borderRadius:4,cursor:'pointer',fontSize:12,fontWeight:700,letterSpacing:'0.1em',touchAction:'manipulation'}}>⇄ Comparer A/B</button>}
+            <button onClick={deleteSelected} style={{padding:'7px 14px',background:T.red,border:'none',color:'#fff',borderRadius:4,cursor:'pointer',fontSize:12,fontWeight:700,letterSpacing:'0.1em',touchAction:'manipulation'}}>🗑 Supprimer</button>
+          </div>
         </div>
       )}
       {history.length===0
@@ -2388,10 +2793,27 @@ function TabHistory({ history, onDelete, onRate, onApply, T }) {
                 {!isMoulin&&h.temp&&<span style={{color:MC}}>{h.temp}°C · PI {h.preInfSec}s@{h.preInfPct}%</span>}
               </div>
               {gLabel&&<div style={{fontFamily:'monospace',fontSize:10,color:T.textMute}}>⚙ {gLabel}{h.grindValue?` · ${h.grindValue} ${GRINDERS[h.grinderId]?.unit}`:''}</div>}
-              {h.coffee?.name&&<div style={{fontFamily:'monospace',fontSize:10,color:T.gold}}>☕ {h.coffee.name}{h.coffee.country?` · ${h.coffee.country}`:''}{h.coffee.process?` · ${h.coffee.process}`:''}</div>}
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              {h.coffee?.name&&(()=>{
+                const fr=freshnessState(daysSinceRoast(h.coffee.roastDate),T)
+                return (
+                  <div style={{fontFamily:'monospace',fontSize:10,color:T.gold,display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                    <span>☕ {h.coffee.name}{h.coffee.country?` · ${h.coffee.country}`:''}{h.coffee.process?` · ${h.coffee.process}`:''}</span>
+                    {fr&&<span style={{padding:'1px 6px',background:`${fr.color}18`,border:`1px solid ${fr.color}55`,borderRadius:8,color:fr.color,fontSize:9}}>{fr.icon} {fr.label}</span>}
+                  </div>
+                )
+              })()}
+              {h.notes&&((h.notes.body||0)>0||(h.notes.sweetness||0)>0||(h.notes.finish||0)>0||(h.notes.aromas?.length||0)>0)&&(
+                <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,display:'flex',gap:8,flexWrap:'wrap'}}>
+                  {h.notes.body>0&&<span>👅 Corps {h.notes.body}/5</span>}
+                  {h.notes.sweetness>0&&<span>🍯 Suc. {h.notes.sweetness}/5</span>}
+                  {h.notes.finish>0&&<span>⏚ Fin. {h.notes.finish}/5</span>}
+                  {h.notes.aromas?.length>0&&<span style={{color:T.gold}}>· {h.notes.aromas.slice(0,3).join(', ')}{h.notes.aromas.length>3?'…':''}</span>}
+                </div>
+              )}
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:6,flexWrap:'wrap'}}>
                 <StarRating rating={h.rating||0} onRate={r=>onRate(h.id,r)} T={T}/>
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <button onClick={e=>{e.stopPropagation();setShareEntry(h)}} style={{padding:'4px 8px',background:`${T.gold}18`,border:`1px solid ${T.gold}55`,color:T.gold,borderRadius:4,cursor:'pointer',fontSize:10,letterSpacing:'0.1em',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>📤</button>
                   <button onClick={e=>{e.stopPropagation();onApply(h)}} style={{padding:'4px 10px',background:`${T.blue}18`,border:`1px solid ${T.blue}55`,color:T.blue,borderRadius:4,cursor:'pointer',fontSize:10,letterSpacing:'0.1em',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>↺ CHARGER</button>
                   {isSel&&<div style={{fontSize:10,color:T.red,letterSpacing:'0.1em',fontWeight:600}}>✓ SÉLECTIONNÉ</div>}
                 </div>
@@ -3136,7 +3558,7 @@ export default function App() {
   const T=darkMode?DARK:LIGHT
   const [mainTab,setMainTab]=useState('calibration')
   const [subTab,setSubTab]=useState('moulin')
-  const [coffee,setCoffee]=useState({name:'',country:'',variety:'',profile:'',process:''})
+  const [coffee,setCoffee]=useState({name:'',country:'',variety:'',profile:'',process:'',roastDate:''})
   const [_sp]=useState(loadSavedParams)
   const [dose,setDose]=useState(_sp.dose||18),[yld,setYld]=useState(_sp.yld||36)
   const [moulinMethod,setMoulinMethod]=useState(_sp.moulinMethod||'espresso')
@@ -3146,11 +3568,39 @@ export default function App() {
   const [machinePreInfPct,setMachinePreInfPct]=useState(_sp.machinePreInfPct||70)
   const [machinePreInfSec,setMachinePreInfSec]=useState(_sp.machinePreInfSec||5)
   const [machineId,setMachineId]=useState(()=>migrateMachineId(_sp.machineId||_sp.machineMachineType))
+  const [notes,setNotes]=useState(_sp.notes||{body:0,sweetness:0,finish:0,aromas:[]})
   const [history,setHistory]=useState(()=>{
     try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):[]}catch{return[]}
   })
   useEffect(()=>{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(history))}catch{}},[history])
-  useEffect(()=>{try{localStorage.setItem(PARAMS_KEY,JSON.stringify({moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,dose,yld}))}catch{}},[moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,dose,yld])
+  useEffect(()=>{try{localStorage.setItem(PARAMS_KEY,JSON.stringify({moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,notes,dose,yld}))}catch{}},[moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,notes,dose,yld])
+
+  // Import recette via URL ?r=<base64>
+  useEffect(()=>{
+    if(typeof window==='undefined')return
+    const p=new URLSearchParams(window.location.search)
+    const r=p.get('r'); if(!r)return
+    const dec=decodeRecipe(r); if(!dec){return}
+    if(dec.coffee)setCoffee({name:dec.coffee.name||'',country:dec.coffee.country||'',variety:dec.coffee.variety||'',profile:dec.coffee.profile||'',process:dec.coffee.process||'',roastDate:dec.coffee.roastDate||''})
+    if(dec.dose)setDose(dec.dose); if(dec.yld)setYld(dec.yld)
+    if(dec.notes)setNotes({body:dec.notes.body||0,sweetness:dec.notes.sweetness||0,finish:dec.notes.finish||0,aromas:dec.notes.aromas||[]})
+    if(dec.mode==='moulin'){
+      setSubTab('moulin')
+      if(dec.method)setMoulinMethod(dec.method)
+      if(dec.grind)setMoulinGrind(dec.grind)
+      if(dec.grinderId)setMoulinGrinderId(dec.grinderId)
+    }else if(dec.mode==='machine'){
+      setSubTab('machine')
+      if(dec.temp)setMachineTemp(dec.temp)
+      if(dec.preInfPct)setMachinePreInfPct(dec.preInfPct)
+      if(dec.preInfSec)setMachinePreInfSec(dec.preInfSec)
+      if(dec.machineId)setMachineId(migrateMachineId(dec.machineId))
+    }
+    setMainTab('calibration')
+    // Nettoie l'URL pour ne pas réimporter au refresh
+    try{window.history.replaceState({},'',window.location.pathname)}catch{}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[])
   const saveEntry=entry=>setHistory(h=>[{...entry,id:Date.now(),ts:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})},...h].slice(0,50))
   const deleteEntries=ids=>setHistory(h=>h.filter(e=>!ids.includes(e.id)))
   const applyRecipe=h=>{
@@ -3168,7 +3618,8 @@ export default function App() {
     }
     if(h.dose)setDose(h.dose)
     if(h.yld)setYld(h.yld)
-    if(h.coffee)setCoffee({name:h.coffee.name||'',country:h.coffee.country||'',variety:h.coffee.variety||'',profile:h.coffee.profile||'',process:h.coffee.process||''})
+    if(h.coffee)setCoffee({name:h.coffee.name||'',country:h.coffee.country||'',variety:h.coffee.variety||'',profile:h.coffee.profile||'',process:h.coffee.process||'',roastDate:h.coffee.roastDate||''})
+    if(h.notes)setNotes({body:h.notes.body||0,sweetness:h.notes.sweetness||0,finish:h.notes.finish||0,aromas:h.notes.aromas||[]})
     setMainTab('calibration')
   }
   const rateEntry=(id,rating)=>setHistory(h=>h.map(e=>e.id===id?{...e,rating}:e))
@@ -3211,7 +3662,7 @@ export default function App() {
 
         {/* NAV PRINCIPALE */}
         <div style={{display:'flex',flexWrap:'wrap',marginBottom:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden',boxShadow:`0 2px 8px ${T.shadow}`}}>
-          {[['calibration','⬤ Calibration'],['history',`☰ Historique (${history.length})`],['recettes','☕ Recettes'],['comparateur','⇄ Comparer'],['boutique','🛒 Acheter']].map(([t,label])=>(
+          {[['calibration','⬤ Calibration'],['history',`☰ Historique (${history.length})`],['analyse','📊 Analyse'],['recettes','☕ Recettes'],['comparateur','⇄ Comparer'],['boutique','🛒 Acheter']].map(([t,label])=>(
             <button key={t} onClick={()=>setMainTab(t)} style={{flex:'1 1 33.33%',minWidth:0,padding:'12px 4px',fontFamily:'sans-serif',fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',background:mainTab===t?T.bg3:'transparent',color:mainTab===t?T.text:T.textMute,border:'none',cursor:'pointer',touchAction:'manipulation',transition:'all 0.2s',fontWeight:mainTab===t?700:400,borderBottom:mainTab===t?`2px solid ${T.gold}`:'2px solid transparent'}}>
               {label}
             </button>
@@ -3229,13 +3680,14 @@ export default function App() {
 
         <div style={{display:mainTab==='calibration'?'block':'none'}}>
           <div style={{display:subTab==='moulin'?'block':'none'}}>
-            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} T={T}/>
+            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} notes={notes} setNotes={setNotes} T={T}/>
           </div>
           <div style={{display:subTab==='machine'?'block':'none'}}>
-            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} T={T}/>
+            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} notes={notes} setNotes={setNotes} T={T}/>
           </div>
         </div>
         {mainTab==='history'&&<TabHistory history={history} onDelete={deleteEntries} onRate={rateEntry} onApply={applyRecipe} T={T}/>}
+        {mainTab==='analyse'&&<TabAnalytics history={history} T={T}/>}
         {mainTab==='recettes'&&<TabRecettes T={T} coffee={coffee} setCoffee={setCoffee}/>}
         {mainTab==='comparateur'&&<TabComparateur T={T}/>}
         {mainTab==='boutique'&&<TabBoutique T={T}/>}
