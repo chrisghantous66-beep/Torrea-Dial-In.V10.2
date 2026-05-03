@@ -523,7 +523,15 @@ function GrindChartModal({ onClose, T }) {
 const GUIDE_MOULIN = `GUIDE D'UTILISATION — ONGLET MOULIN
 
 ① CAFÉ UTILISÉ
-Renseignez le café que vous utilisez : nom, pays, variété, profil aromatique et process (lavé, naturel, honey…). Ces infos seront sauvegardées dans l'historique.
+Renseignez le café : nom, pays, variété, profil aromatique et process (lavé, naturel, honey…).
+
+📅 DATE DE TORRÉFACTION & FRAÎCHEUR
+Saisis la date de torréfaction. Un badge coloré indique l'état du café :
+• 0–3j   → ⏳ Trop frais (dégazage en cours)
+• 4–21j  → ✓ Optimal (fenêtre idéale)
+• 22–45j → • Bon (toujours utilisable)
+• 46–90j → ! Vieillissant (arômes en déclin)
+• 90j+   → ✕ Stale (oxydé, à éviter)
 
 ② MÉTHODE D'EXTRACTION
 Choisissez votre méthode (Espresso, Filtre, AeroPress, Chemex, Moka). Chaque méthode a ses propres cibles de ratio et de temps.
@@ -550,12 +558,23 @@ Après avoir goûté, appuyez sur :
 • ☕ Trop amer → mouture plus grossière
 L'app ajuste automatiquement la mouture.
 
+👅 NOTES DE DÉGUSTATION
+Note Corps / Sucrosité / Finale (0–5) et coche les arômes perçus (Chocolat, Agrumes, Floral…). Ces notes sont sauvegardées avec le shot et visibles dans l'historique et la comparaison A/B.
+
 ⑧ ANALYSE
 Score /100 calculé d'après le ratio et le temps. Un score ≥ 90 = extraction parfaite.
 
+📊 ONGLET ANALYSE
+Suivi des KPI (shots totaux, score moyen, % parfaits), courbe de progression dans le temps, répartition par méthode et top cafés par meilleur score.
+
+📤 PARTAGE & ⇄ COMPARAISON A/B
+Depuis l'historique :
+• 📤 → QR code + lien à coller pour partager une recette (s'ouvre auto à l'arrivée)
+• Sélectionne 2 shots → ⇄ Comparer A/B pour voir les différences côte à côte
+
 CONSEILS
 • Changez UN paramètre à la fois entre chaque shot
-• Attendez que le moulin soit chaud (2-3 shots) avant de dial-in
+• Attendez que le moulin soit chaud (2–3 shots) avant de dial-in
 • Notez vos recettes avec ✨ pour les retrouver dans l'historique
 
 🫘 EASTER EGG — COFFEE INVADER
@@ -563,10 +582,30 @@ Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suff
 Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…`
 
 const GUIDE_MACHINE = `GUIDE D'UTILISATION — ONGLET MACHINE
-(Breville Dual Boiler)
+(Espresso · multi-machines)
 
 ① CAFÉ UTILISÉ
 Renseignez le café : nom, pays, variété, profil aromatique, process.
+
+📅 DATE DE TORRÉFACTION & FRAÎCHEUR
+Saisis la date de torréfaction. Un badge coloré indique l'état du café :
+• 0–3j   → ⏳ Trop frais (dégazage)
+• 4–21j  → ✓ Optimal
+• 22–45j → • Bon
+• 46–90j → ! Vieillissant
+• 90j+   → ✕ Stale
+
+⚙ SÉLECTEUR DE MACHINE
+Sélectionne ta machine espresso. 13 modèles disponibles classés en
+4 catégories de pré-infusion :
+• Sans pré-infusion (Gaggia Classic Pro, Rancilio Silvia, Dedica…)
+  → seules la dose, le yield, le temps et la température comptent
+• Pré-infusion fixe (Bambino, Barista Express, Linea Micra)
+  → valeurs constructeur appliquées automatiquement, non modifiables
+• Pré-infusion programmable (Breville Dual Boiler, Oracle, Lelit Bianca)
+  → durée et pression réglables · ajustées par le moteur de dial-in
+• Levier / manuelle (La Pavoni, Flair 58, Cafelat Robot)
+  → pré-infusion gérée à la main
 
 ② DOSAGE
 • Dose : café (g) dans le panier filtre (typiquement 18–20g)
@@ -577,6 +616,7 @@ La pre-infusion humidifie le café avant l'extraction pleine pression.
 • Pression : 55–99% (typiquement 70–80%)
 • Durée : 3–8 secondes recommandés
 → Plus de pre-infusion = extraction plus uniforme, moins d'amertume
+(Disponible uniquement sur les machines à PI fixe ou programmable)
 
 ④ TEMPS D'EXTRACTION
 Démarrez le timer. Cible : 20–35 secondes totales (pre-infusion incluse).
@@ -587,21 +627,31 @@ Cible : 91–94°C pour la plupart des cafés.
 • Cafés foncés / amers → baisser la température
 
 ⑥ RESSENTI EN TASSE
-• 🍋 Trop acide → hausse temp. + augmente pre-infusion
+• 🍋 Trop acide → hausse temp. (+ pre-infusion si programmable)
 • ✨ Parfait → sauvegarde la recette
-• ☕ Trop amer → baisse temp. + réduit pre-infusion
+• ☕ Trop amer → baisse temp. (− pre-infusion si programmable)
+
+👅 NOTES DE DÉGUSTATION
+Note Corps / Sucrosité / Finale (0–5) et coche les arômes perçus.
+Ces notes sont sauvegardées avec le shot et utilisées dans la
+comparaison A/B et les analytics.
 
 ⑦ ANALYSE
 Score sur 100 combinant ratio, temps et température.
 
-RÉGLAGES BREVILLE DUAL BOILER
-• Pre-Infusion : menu Extraction → Pre-infusion
-• Température : menu Steam/Extraction → Temp.
-• Pression max réglable sur la machine
+📊 ONGLET ANALYSE
+KPI (shots, score moyen, % parfaits), courbe de progression dans
+le temps, histogramme par méthode, top cafés par meilleur score.
+
+📤 PARTAGE & ⇄ COMPARAISON A/B
+Depuis l'historique :
+• 📤 → QR code + lien à coller pour partager une recette
+• Sélectionne 2 shots → ⇄ Comparer A/B pour identifier le meilleur
 
 🫘 EASTER EGG — COFFEE INVADER
 Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suffisent à la réveiller.
-Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…`
+Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…
+(Disponible uniquement avec une machine à pré-infusion programmable)`
 
 function GuideModal({ mode, onClose, T }) {
   const text = mode === 'moulin' ? GUIDE_MOULIN : GUIDE_MACHINE
