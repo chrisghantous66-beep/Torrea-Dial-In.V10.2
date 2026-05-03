@@ -103,6 +103,44 @@ const GRINDERS = {
   capresso_infinity: { label:'Infinity Plus', brand:'Capresso', clicks:20, unit:'réglage', minµm:200, maxµm:1000, espresso:[1,4], filter:[8,16], aeropress:[5,13], chemex:[10,18], moka:[3,7], description:'20 réglages · conique acier' },
 }
 
+// ─── MACHINES ESPRESSO ────────────────────────────────────────────────────────
+// piType : 'none' | 'fixed' | 'programmable' | 'lever'
+// fixedPI : valeurs constructeur indicatives pour piType='fixed' (sec, pct)
+const MACHINES = {
+  // ── Sans pre-infusion ──
+  gaggia_classic:   { label:'Classic Pro',                 brand:'Gaggia',         piType:'none',         description:'Single boiler · pas de pre-infusion' },
+  rancilio_silvia:  { label:'Silvia',                      brand:'Rancilio',       piType:'none',         description:'Single boiler · pas de pre-infusion' },
+  delonghi_dedica:  { label:'Dedica / EC685',              brand:"De'Longhi",      piType:'none',         description:'Compact · pas de pre-infusion' },
+  classic_other:    { label:'Autre / classique',           brand:'Générique',      piType:'none',         description:'Toute machine sans pre-infusion' },
+
+  // ── Pre-Infusion fixe ──
+  breville_bambino: { label:'Bambino / Bambino Plus',      brand:'Breville (Sage)', piType:'fixed',        fixedPI:{sec:9,pct:65}, description:'Pre-Infusion fixe ~9s à basse pression' },
+  breville_express: { label:'Barista Express / Pro / Touch',brand:'Breville (Sage)', piType:'fixed',       fixedPI:{sec:7,pct:70}, description:'Pre-Infusion fixe ~7s' },
+  lm_micra:         { label:'Linea Micra',                  brand:'La Marzocco',    piType:'fixed',        fixedPI:{sec:4,pct:60}, description:'Flow restrictor · PI courte basse pression' },
+
+  // ── Pre-Infusion programmable ──
+  breville_dual:    { label:'Dual Boiler',                 brand:'Breville (Sage)', piType:'programmable', description:'Pre-Infusion réglable (durée + pression)' },
+  sage_oracle:      { label:'Oracle / Oracle Touch',       brand:'Breville (Sage)', piType:'programmable', description:'Pre-Infusion réglable' },
+  lelit_bianca:     { label:'Bianca',                      brand:'Lelit',           piType:'programmable', description:'Paddle flow · pre-infusion réglable' },
+
+  // ── Levier / manuelle ──
+  pavoni_euro:      { label:'Europiccola',                 brand:'La Pavoni',       piType:'lever',        description:'Levier manuel · pre-infusion à la main' },
+  flair_58:         { label:'Flair 58',                    brand:'Flair',           piType:'lever',        description:'Pression manuelle · pre-infusion à la main' },
+  cafelat_robot:    { label:'Robot',                       brand:'Cafelat',         piType:'lever',        description:'Levier manuel · pre-infusion à la main' },
+}
+const MACHINE_CATEGORIES = [
+  { piType:'none',         label:'Sans pre-infusion' },
+  { piType:'fixed',        label:'Pre-Infusion fixe' },
+  { piType:'programmable', label:'Pre-Infusion programmable' },
+  { piType:'lever',        label:'Levier / manuelle' },
+]
+function getMachine(id){ return MACHINES[id] || MACHINES.gaggia_classic }
+function migrateMachineId(stored){
+  if (stored === 'breville') return 'breville_dual'
+  if (stored === 'classic')  return 'gaggia_classic'
+  return stored && MACHINES[stored] ? stored : 'gaggia_classic'
+}
+
 // ─── MÉTHODES ─────────────────────────────────────────────────────────────────
 const BREW_METHODS = {
   espresso:  { label:'Espresso',  icon:'☕', targetRatioMin:1.5, targetRatioMax:2.5,  targetTimeMin:20,  targetTimeMax:35,  grindBaseµm:200, grindRangeµm:[150,380],  description:'1:2 · 20–35s' },
@@ -184,40 +222,42 @@ function computeTasteGrind({ taste, method, doseG, yieldG, currentGrindµm }, T)
   return { taste, delta:actual, newGrind:ng, newYield, detail, color:taste==='acid'?T.blue:T.orange, message:taste==='acid'?`← PLUS FIN · ${ng}µm`:`→ PLUS GROSSIER · ${ng}µm`, steps:Math.round(Math.abs(actual)/5) }
 }
 
-function computeMachineDialIn({ doseG, yieldG, timeSec, tempC, preInfPct, preInfSec, classic=false }) {
+function computeMachineDialIn({ doseG, yieldG, timeSec, tempC, preInfPct, preInfSec, piType='none' }) {
   if (!doseG||!yieldG||!timeSec) return null
   const ratio=yieldG/doseG
   const rS=ratio<1.5?ratio/1.5:ratio>2.5?2.5/ratio:1
   const tS=timeSec<20?timeSec/20:timeSec>35?35/timeSec:1
   const tmpS=tempC<90?tempC/90:tempC>96?96/tempC:1
   const score=Math.round((rS*0.35+tS*0.4+tmpS*0.25)*100)
+  const canTunePI = piType === 'programmable'
   let suggestions=[], newTemp=tempC, newPreInfSec=preInfSec, newPreInfPct=preInfPct
   if (timeSec<20){
-    suggestions.push(classic?'Trop rapide → baisser la température':'Trop rapide → baisser temp. ou augmenter pré-infusion')
+    suggestions.push(canTunePI?'Trop rapide → baisser temp. ou augmenter pre-infusion':'Trop rapide → baisser la température')
     newTemp=clamp(tempC-1,85,96)
-    if(!classic) newPreInfSec=clamp(preInfSec+2,1,30)
+    if(canTunePI) newPreInfSec=clamp(preInfSec+2,1,30)
   } else if (timeSec>35){
-    suggestions.push(classic?'Trop lent → monter la température':'Trop lent → monter temp. ou réduire pré-infusion')
+    suggestions.push(canTunePI?'Trop lent → monter temp. ou réduire pre-infusion':'Trop lent → monter la température')
     newTemp=clamp(tempC+1,85,96)
-    if(!classic) newPreInfSec=clamp(preInfSec-1,1,30)
+    if(canTunePI) newPreInfSec=clamp(preInfSec-1,1,30)
   }
   if (ratio<1.5) suggestions.push(`Rendement faible (1:${ratio.toFixed(1)}) → vérifier mouture`)
   if (ratio>2.5) suggestions.push(`Rendement élevé (1:${ratio.toFixed(1)}) → réduire le yield`)
   return { score, ratioScore:Math.round(rS*100), timeScore:Math.round(tS*100), tempScore:Math.round(tmpS*100), ratio, suggestions, newTemp, newPreInfSec, newPreInfPct, isPerfect:score>=90 }
 }
 
-function computeTasteMachine({ taste, tempC, preInfPct, preInfSec, yieldG, classic=false }, T) {
+function computeTasteMachine({ taste, tempC, preInfPct, preInfSec, yieldG, piType='none' }, T) {
   if (taste==='perfect') return { taste, color:T.green, message:'✓ RECETTE SAUVEGARDÉE', detail:[], newTemp:tempC, newPreInfPct:preInfPct, newPreInfSec:preInfSec, newYield:yieldG }
+  const canTunePI = piType === 'programmable'
   let newTemp=tempC, newPreInfPct=preInfPct, newPreInfSec=preInfSec, detail=[]
   if (taste==='acid') {
     newTemp=clamp(tempC+1,85,96)
     detail.push(`Température → ${newTemp}°C`)
-    if(!classic){newPreInfSec=clamp(preInfSec+2,1,30);newPreInfPct=clamp(preInfPct+5,55,99);detail.push(`Pré-infusion → ${newPreInfSec}s à ${newPreInfPct}%`)}
+    if(canTunePI){newPreInfSec=clamp(preInfSec+2,1,30);newPreInfPct=clamp(preInfPct+5,55,99);detail.push(`Pre-infusion → ${newPreInfSec}s à ${newPreInfPct}%`)}
     detail.push("Extraction accrue → réduit l'acidité")
   } else {
     newTemp=clamp(tempC-1,85,96)
     detail.push(`Température → ${newTemp}°C`)
-    if(!classic){newPreInfSec=clamp(preInfSec-1,1,30);newPreInfPct=clamp(preInfPct-5,55,99);detail.push(`Pré-infusion → ${newPreInfSec}s à ${newPreInfPct}%`)}
+    if(canTunePI){newPreInfSec=clamp(preInfSec-1,1,30);newPreInfPct=clamp(preInfPct-5,55,99);detail.push(`Pre-infusion → ${newPreInfSec}s à ${newPreInfPct}%`)}
     detail.push("Extraction réduite → moins d'amertume")
   }
   return { taste, color:taste==='acid'?T.blue:T.orange, message:taste==='acid'?'↑ PLUS CHAUD':'↓ PLUS FROID', detail, newTemp, newPreInfPct, newPreInfSec, newYield:yieldG }
@@ -439,14 +479,14 @@ Renseignez le café : nom, pays, variété, profil aromatique, process.
 • Dose : café (g) dans le panier filtre (typiquement 18–20g)
 • Rendement : café extrait (g) dans la tasse (cible 36–40g pour 1:2)
 
-③ PRÉ-INFUSION
-La pré-infusion humidifie le café avant l'extraction pleine pression.
+③ PRE-INFUSION
+La pre-infusion humidifie le café avant l'extraction pleine pression.
 • Pression : 55–99% (typiquement 70–80%)
 • Durée : 3–8 secondes recommandés
-→ Plus de pré-infusion = extraction plus uniforme, moins d'amertume
+→ Plus de pre-infusion = extraction plus uniforme, moins d'amertume
 
 ④ TEMPS D'EXTRACTION
-Démarrez le timer. Cible : 20–35 secondes totales (pré-infusion incluse).
+Démarrez le timer. Cible : 20–35 secondes totales (pre-infusion incluse).
 
 ⑤ TEMPÉRATURE
 Cible : 91–94°C pour la plupart des cafés.
@@ -454,15 +494,15 @@ Cible : 91–94°C pour la plupart des cafés.
 • Cafés foncés / amers → baisser la température
 
 ⑥ RESSENTI EN TASSE
-• 🍋 Trop acide → hausse temp. + augmente pré-infusion
+• 🍋 Trop acide → hausse temp. + augmente pre-infusion
 • ✨ Parfait → sauvegarde la recette
-• ☕ Trop amer → baisse temp. + réduit pré-infusion
+• ☕ Trop amer → baisse temp. + réduit pre-infusion
 
 ⑦ ANALYSE
 Score sur 100 combinant ratio, temps et température.
 
 RÉGLAGES BREVILLE DUAL BOILER
-• Pré-infusion : menu Extraction → Pre-infusion
+• Pre-Infusion : menu Extraction → Pre-infusion
 • Température : menu Steam/Extraction → Temp.
 • Pression max réglable sur la machine
 
@@ -2049,35 +2089,87 @@ function CoffeeInvaders({ onClose, T }) {
   )
 }
 
+// ─── MACHINE SELECTOR ─────────────────────────────────────────────────────────
+function MachineSelector({ machineId, setMachineId, T }) {
+  const [open,setOpen]=useState(false)
+  const m = getMachine(machineId)
+  return (
+    <div style={card(T)}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{...SL(T),marginBottom:0}}>☕ Machine <span style={{color:MC,marginLeft:4}}>●</span></div>
+        <div style={{fontSize:18,color:T.textMute,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',lineHeight:1}}>▾</div>
+      </div>
+      {!open&&(
+        <div style={{marginTop:8}}>
+          <div style={{fontFamily:'monospace',fontSize:12,color:MC,fontWeight:700}}>{m.label}{m.brand?` — ${m.brand}`:''}</div>
+          {m.description&&<div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:3}}>{m.description}</div>}
+        </div>
+      )}
+      {open&&(
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:10}}>Sélectionner la machine</div>
+          {MACHINE_CATEGORIES.map(cat=>{
+            const entries=Object.entries(MACHINES).filter(([,v])=>v.piType===cat.piType)
+            if(!entries.length) return null
+            return (
+              <div key={cat.piType}>
+                <div style={{fontSize:9,letterSpacing:'0.3em',color:T.textMute,textTransform:'uppercase',marginTop:10,marginBottom:5,paddingLeft:8,borderLeft:`2px solid ${MC}44`}}>{cat.label}</div>
+                {entries.map(([k,v])=>(
+                  <button key={k} onClick={()=>{setMachineId(k);setOpen(false)}} style={{width:'100%',textAlign:'left',padding:'9px 12px',marginBottom:4,background:machineId===k?`${MC}18`:T.bg3,border:`1px solid ${machineId===k?MC:T.border}`,borderRadius:5,color:machineId===k?MC:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                    <span style={{fontWeight:machineId===k?700:400}}>{v.label}{v.brand?` — ${v.brand}`:''}</span>
+                    {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                  </button>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── TAB MACHINE ──────────────────────────────────────────────────────────────
-function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineType, setMachineType, T }) {
+function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, T }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
   const [showGuide,setShowGuide]=useState(false)
   const [liveWeight,setLiveWeight]=useState(0),[liveWeightOpen,setLiveWeightOpen]=useState(false)
   const [showInvaders,setShowInvaders]=useState(false)
+  const machine=getMachine(machineId)
+  const piType=machine.piType
   const titleClickRef=useRef({count:0,lastTime:0})
   const onTitleClick=()=>{
-    if(machineType!=='breville')return
+    if(piType!=='programmable')return
     const now=Date.now(),ref=titleClickRef.current
     if(now-ref.lastTime>1500)ref.count=0
     ref.count++;ref.lastTime=now
     if(ref.count>=7){ref.count=0;setShowInvaders(true)}
   }
-  const result=computeMachineDialIn({doseG:dose,yieldG:yld,timeSec:time,tempC:temp,preInfPct,preInfSec,classic:machineType==='classic'})
+
+  // Sync valeurs constructeur quand on choisit une machine à PI fixe
+  useEffect(()=>{
+    if(piType==='fixed'&&machine.fixedPI){
+      setPreInfSec(machine.fixedPI.sec)
+      setPreInfPct(machine.fixedPI.pct)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[machineId])
+
+  const result=computeMachineDialIn({doseG:dose,yieldG:yld,timeSec:time,tempC:temp,preInfPct,preInfSec,piType})
   const targetWeight=Math.round(dose*2.0)
   const liveW=liveWeight>0?liveWeight:yld
   const ratioProgress=Math.min((liveW/dose)/2.0*100,100)
   const ratioColor=ratioProgress>=95?T.green:ratioProgress>=80?T.orange:T.red
 
   const doTaste=taste=>{
-    const fb=computeTasteMachine({taste,tempC:temp,preInfPct,preInfSec,yieldG:yld,classic:machineType==='classic'},T)
+    const fb=computeTasteMachine({taste,tempC:temp,preInfPct,preInfSec,yieldG:yld,piType},T)
     if(!fb)return;setFlash(taste);setTimeout(()=>setFlash(null),1000);setFeedback(fb)
-    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,taste,score:taste==='perfect'?100:(result?.score??0),coffee:{...coffee}})
+    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,taste,score:taste==='perfect'?100:(result?.score??0),coffee:{...coffee}})
     if(taste!=='perfect'){setTemp(fb.newTemp);setPreInfPct(fb.newPreInfPct);setPreInfSec(fb.newPreInfSec)}
   }
   const applyResult=()=>{
     if(!result)return
-    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,score:result.score,coffee:{...coffee}})
+    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,score:result.score,coffee:{...coffee}})
     setTemp(result.newTemp);setPreInfSec(result.newPreInfSec);setPreInfPct(result.newPreInfPct)
   }
 
@@ -2092,34 +2184,47 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
     </div>
 
     <div style={{...card(T),border:`1px solid ${MC}44`,background:`${MC}08`}}>
-      <div onClick={onTitleClick} style={{...SL(T),color:MC,cursor:'pointer',userSelect:'none',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>⚙ {machineType==='classic'?'Machine classique':'Breville Dual Boiler'}</div>
+      <div onClick={onTitleClick} style={{...SL(T),color:MC,cursor:'pointer',userSelect:'none',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>⚙ {machine.label}{machine.brand?` — ${machine.brand}`:''}</div>
       <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute}}>Espresso · ratio 1:2 · 20–35s · 90–96°C</div>
     </div>
+
+    <MachineSelector machineId={machineId} setMachineId={setMachineId} T={T}/>
 
     <CoffeeCard coffee={coffee} setCoffee={setCoffee} T={T}/>
     <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
 
-    {/* PRÉ-INFUSION */}
+    {/* PRE-INFUSION */}
     <div style={card(T)}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-        <div style={{...SL(T),marginBottom:0}}>Pré-infusion</div>
-        <div style={{display:'flex',gap:6}}>
-          {[['breville','Breville'],['classic','Classique']].map(([k,label])=>(
-            <button key={k} onClick={()=>setMachineType(k)} style={{
-              padding:'5px 12px',borderRadius:4,cursor:'pointer',fontSize:11,letterSpacing:'0.08em',fontWeight:700,
-              border:`1px solid ${machineType===k?MC:T.border}`,
-              background:machineType===k?`${MC}22`:T.bg,
-              color:machineType===k?MC:T.textDim,
-              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
-            }}>{label}</button>
-          ))}
+        <div style={{...SL(T),marginBottom:0}}>Pre-Infusion</div>
+        <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,letterSpacing:'0.1em',textTransform:'uppercase'}}>
+          {piType==='none'&&'Aucune'}
+          {piType==='fixed'&&'Fixe (constructeur)'}
+          {piType==='programmable'&&'Réglable'}
+          {piType==='lever'&&'Manuelle'}
         </div>
       </div>
-      {machineType==='classic'?(
+      {piType==='none'&&(
         <div style={{padding:'16px 0',textAlign:'center',color:T.textMute,fontFamily:'monospace',fontSize:13,letterSpacing:'0.1em',opacity:0.6}}>
-          — Sans pré-infusion —
+          — Sans pre-infusion —
         </div>
-      ):(
+      )}
+      {piType==='lever'&&(
+        <div style={{padding:'16px 0',textAlign:'center',color:T.textMute,fontFamily:'monospace',fontSize:13,letterSpacing:'0.1em',opacity:0.6}}>
+          — Pre-Infusion manuelle (levier) —
+        </div>
+      )}
+      {piType==='fixed'&&(
+        <>
+          <div style={{display:'flex',gap:16,flexWrap:'wrap',opacity:0.75,pointerEvents:'none'}}>
+            <NumIn label="Durée" val={preInfSec} set={()=>{}} unit="s" min={1} max={30} color={MC} T={T}/>
+            <NumIn label="Pression" val={preInfPct} set={()=>{}} unit="%" min={55} max={99} step={1} color={MC} T={T}/>
+          </div>
+          <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>Valeurs constructeur — non modifiables</div>
+          <Bar pct={(preInfSec/10)*100} color={preInfSec>=3&&preInfSec<=10?T.green:T.orange} T={T}/>
+        </>
+      )}
+      {piType==='programmable'&&(
         <>
           <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
             <NumIn label="Durée" val={preInfSec} set={setPreInfSec} unit="s" min={1} max={30} color={MC} T={T}/>
@@ -2214,7 +2319,7 @@ function TabMachine({ coffee, setCoffee, onSave, dose, setDose, yld, setYld, tim
             {(result.newTemp!==temp||result.newPreInfSec!==preInfSec)&&(
               <div style={{fontFamily:'monospace',fontSize:11,color:MC,marginTop:4,display:'flex',gap:12,flexWrap:'wrap'}}>
                 {result.newTemp!==temp&&<span>Temp → {result.newTemp}°C</span>}
-                {result.newPreInfSec!==preInfSec&&<span>Pré-inf → {result.newPreInfSec}s</span>}
+                {result.newPreInfSec!==preInfSec&&<span>Pre-inf → {result.newPreInfSec}s</span>}
               </div>
             )}
             <button onClick={applyResult} style={{marginTop:12,padding:'13px 20px',border:`1px solid ${MC}`,background:`${MC}22`,color:MC,borderRadius:4,cursor:'pointer',fontSize:13,letterSpacing:'0.1em',fontWeight:700,width:'100%',touchAction:'manipulation'}}>
@@ -3040,12 +3145,12 @@ export default function App() {
   const [machineTemp,setMachineTemp]=useState(_sp.machineTemp||93)
   const [machinePreInfPct,setMachinePreInfPct]=useState(_sp.machinePreInfPct||70)
   const [machinePreInfSec,setMachinePreInfSec]=useState(_sp.machinePreInfSec||5)
-  const [machineMachineType,setMachineMachineType]=useState(_sp.machineMachineType||'breville')
+  const [machineId,setMachineId]=useState(()=>migrateMachineId(_sp.machineId||_sp.machineMachineType))
   const [history,setHistory]=useState(()=>{
     try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):[]}catch{return[]}
   })
   useEffect(()=>{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(history))}catch{}},[history])
-  useEffect(()=>{try{localStorage.setItem(PARAMS_KEY,JSON.stringify({moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineMachineType,dose,yld}))}catch{}},[moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineMachineType,dose,yld])
+  useEffect(()=>{try{localStorage.setItem(PARAMS_KEY,JSON.stringify({moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,dose,yld}))}catch{}},[moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,dose,yld])
   const saveEntry=entry=>setHistory(h=>[{...entry,id:Date.now(),ts:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})},...h].slice(0,50))
   const deleteEntries=ids=>setHistory(h=>h.filter(e=>!ids.includes(e.id)))
   const applyRecipe=h=>{
@@ -3059,6 +3164,7 @@ export default function App() {
       if(h.temp)setMachineTemp(h.temp)
       if(h.preInfPct)setMachinePreInfPct(h.preInfPct)
       if(h.preInfSec)setMachinePreInfSec(h.preInfSec)
+      if(h.machineId)setMachineId(migrateMachineId(h.machineId))
     }
     if(h.dose)setDose(h.dose)
     if(h.yld)setYld(h.yld)
@@ -3126,7 +3232,7 @@ export default function App() {
             <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} T={T}/>
           </div>
           <div style={{display:subTab==='machine'?'block':'none'}}>
-            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineType={machineMachineType} setMachineType={setMachineMachineType} T={T}/>
+            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} T={T}/>
           </div>
         </div>
         {mainTab==='history'&&<TabHistory history={history} onDelete={deleteEntries} onRate={rateEntry} onApply={applyRecipe} T={T}/>}
