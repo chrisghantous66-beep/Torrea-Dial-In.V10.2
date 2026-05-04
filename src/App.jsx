@@ -155,6 +155,7 @@ const STORAGE_KEY = 'torrea_v3'
 const COFFEE_LIB_KEY = 'torrea_coffees'
 const PARAMS_KEY = 'torrea_params_v1'
 const SAVED_RECIPES_KEY = 'torrea_saved_recipes_v1'
+const WELCOME_KEY = 'torrea_welcome_v1'
 function loadSavedParams() {
   try { return JSON.parse(localStorage.getItem(PARAMS_KEY)||'{}') } catch { return {} }
 }
@@ -3755,10 +3756,61 @@ function TabBoutique({ T }) {
   )
 }
 
+// ─── WELCOME MODAL ────────────────────────────────────────────────────────────
+function WelcomeModal({ onClose, T }) {
+  const features = [
+    { icon: '⚙', title: 'Calibration Moulin', desc: "Analyse ton ratio et ton temps d'extraction, recommande des ajustements de mouture progressifs." },
+    { icon: '☕', title: 'Calibration Machine', desc: 'Optimise ta température et ta pré-infusion selon tes résultats en tasse.' },
+    { icon: '▽', title: 'Recettes', desc: 'Copie ou génère des recettes personnalisées selon ton café, ta torréfaction et le profil en tasse recherché.' },
+    { icon: '☰', title: 'Historique & Analyse', desc: 'Retrouve tous tes shots passés et visualise tes progressions.' },
+    { icon: '✨', title: 'Torrea Tailor – Blend Personnalisé', desc: 'Crée ton blend café sur-mesure avec notre configurateur dédié.' },
+  ]
+  return (
+    <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',background:'rgba(0,0,0,0.72)',backdropFilter:'blur(4px)'}}>
+      <div style={{background:T.bg2,border:`1px solid ${T.gold}66`,borderRadius:14,maxWidth:420,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:`0 8px 40px rgba(0,0,0,0.6)`}}>
+        {/* Header */}
+        <div style={{padding:'24px 20px 16px',borderBottom:`1px solid ${T.border}`,textAlign:'center'}}>
+          <div style={{fontSize:26,fontWeight:900,color:T.gold,fontFamily:'Georgia,serif',letterSpacing:'-0.02em',lineHeight:1}}>TORREA</div>
+          <div style={{fontSize:9,letterSpacing:'0.55em',color:T.textMute,marginTop:3}}>DIAL-IN SYSTEM</div>
+          <div style={{marginTop:12,fontSize:13,color:T.textDim,lineHeight:1.5}}>
+            Ton assistant de calibration café — tire le meilleur de chaque grain, à chaque extraction.
+          </div>
+        </div>
+        {/* Features */}
+        <div style={{padding:'16px 20px'}}>
+          {features.map(f=>(
+            <div key={f.title} style={{display:'flex',gap:12,marginBottom:14,alignItems:'flex-start'}}>
+              <div style={{fontSize:18,flexShrink:0,marginTop:1,width:24,textAlign:'center'}}>{f.icon}</div>
+              <div>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.1em',color:T.gold,textTransform:'uppercase',marginBottom:2}}>{f.title}</div>
+                <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>{f.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* CTA */}
+        <div style={{padding:'0 20px 20px'}}>
+          <button onClick={onClose} style={{
+            width:'100%',padding:'14px 0',
+            background:`${T.gold}22`,border:`1px solid ${T.gold}`,
+            color:T.gold,borderRadius:8,cursor:'pointer',
+            fontSize:13,letterSpacing:'0.2em',fontWeight:700,
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>
+            COMMENCER →
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [darkMode,setDarkMode]=useState(true)
   const T=darkMode?DARK:LIGHT
+  const [showWelcome,setShowWelcome]=useState(()=>{try{return!localStorage.getItem(WELCOME_KEY)}catch{return true}})
+  const closeWelcome=()=>{try{localStorage.setItem(WELCOME_KEY,'1')}catch{};setShowWelcome(false)}
   const [mainTab,setMainTab]=useState('calibration')
   const [subTab,setSubTab]=useState('moulin')
   const [coffee,setCoffee]=useState({name:'',country:'',variety:'',profile:'',process:'',roastDate:''})
@@ -3861,6 +3913,7 @@ export default function App() {
       backgroundImage:darkMode?`linear-gradient(${T.bg3} 1px,transparent 1px),linear-gradient(90deg,${T.bg3} 1px,transparent 1px)`:`linear-gradient(${T.bg4} 1px,transparent 1px),linear-gradient(90deg,${T.bg4} 1px,transparent 1px)`,
       backgroundSize:'44px 44px',position:'relative'}}>
 
+      {showWelcome&&<WelcomeModal onClose={closeWelcome} T={T}/>}
       <CaffeineBackground darkMode={darkMode}/>
 
       <div style={{maxWidth:520,margin:'0 auto',padding:'0 16px 80px',position:'relative',zIndex:1}}>
