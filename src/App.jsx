@@ -3736,7 +3736,7 @@ function TabBoutique({ T }) {
         href="https://torrea.fr/"
         icon="🛒"
         title="Boutique TORREA"
-        subtitle="Découvrez notre sélection de cafés artisanaux, torréfiés en France"
+        subtitle="Découvrez notre sélection de cafés de spécialité, torréfiés artisanalement"
         color={T.gold}
       />
       <Btn
