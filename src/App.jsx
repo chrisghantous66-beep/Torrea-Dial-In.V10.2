@@ -3279,6 +3279,8 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
   const [intensity,setIntensity]=useState('balanced')
   const [generated,setGenerated]=useState(null)
   const [justSaved,setJustSaved]=useState(false)
+  const [savingMode,setSavingMode]=useState(false)
+  const [customTitle,setCustomTitle]=useState('')
 
   const toggleProfile=(id)=>{
     setProfileIds(prev=>{
@@ -3291,12 +3293,20 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
     const r=generateRecipe({methodId,coffee,roastId:roast,profileIds,intensityId:intensity,grinderId})
     setGenerated(r)
     setJustSaved(false)
+    setSavingMode(false)
   }
 
   const handleSave=()=>{
     if(!generated||justSaved) return
-    const ok=onSave(generated)
-    if(ok) setJustSaved(true)
+    setSavingMode(true)
+    setCustomTitle(generated.title)
+  }
+
+  const handleConfirmSave=()=>{
+    if(!generated) return
+    const title=(customTitle||'').trim()||generated.title
+    const ok=onSave({...generated,title})
+    if(ok){setJustSaved(true);setSavingMode(false)}
   }
 
   const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
@@ -3370,17 +3380,44 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
       {generated&&(
         <div style={{padding:'4px 14px 14px'}}>
           <RecipeCard recipe={generated} T={T} grinder={grinder}/>
-          <button onClick={handleSave} disabled={justSaved} style={{
-            width:'100%',padding:'11px 0',marginTop:-4,
-            border:`1px solid ${justSaved?T.green:T.gold}`,
-            background:justSaved?`${T.green}22`:`${T.gold}11`,
-            color:justSaved?T.green:T.gold,
-            borderRadius:6,cursor:justSaved?'default':'pointer',
-            fontSize:12,letterSpacing:'0.15em',fontWeight:700,
-            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
-          }}>
-            {justSaved?'✓ RECETTE SAUVEGARDÉE':'💾 SAUVEGARDER CETTE RECETTE'}
-          </button>
+          {savingMode?(
+            <div style={{marginTop:4,display:'flex',gap:6}}>
+              <input
+                value={customTitle}
+                onChange={e=>setCustomTitle(e.target.value)}
+                onKeyDown={e=>{if(e.key==='Enter')handleConfirmSave();if(e.key==='Escape')setSavingMode(false)}}
+                placeholder="Nom de la recette"
+                autoFocus
+                style={{
+                  flex:1,padding:'10px 12px',fontFamily:'monospace',fontSize:12,
+                  background:T.bg,border:`1px solid ${T.gold}`,color:T.text,
+                  borderRadius:6,outline:'none',minWidth:0,
+                }}
+              />
+              <button onClick={handleConfirmSave} style={{
+                padding:'10px 14px',border:`1px solid ${T.green}`,background:`${T.green}22`,
+                color:T.green,borderRadius:6,cursor:'pointer',fontSize:13,fontWeight:700,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',flexShrink:0,
+              }}>✓</button>
+              <button onClick={()=>setSavingMode(false)} style={{
+                padding:'10px 14px',border:`1px solid ${T.border}`,background:'transparent',
+                color:T.textMute,borderRadius:6,cursor:'pointer',fontSize:13,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',flexShrink:0,
+              }}>✕</button>
+            </div>
+          ):(
+            <button onClick={handleSave} disabled={justSaved} style={{
+              width:'100%',padding:'11px 0',marginTop:-4,
+              border:`1px solid ${justSaved?T.green:T.gold}`,
+              background:justSaved?`${T.green}22`:`${T.gold}11`,
+              color:justSaved?T.green:T.gold,
+              borderRadius:6,cursor:justSaved?'default':'pointer',
+              fontSize:12,letterSpacing:'0.15em',fontWeight:700,
+              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+            }}>
+              {justSaved?'✓ RECETTE SAUVEGARDÉE':'💾 SAUVEGARDER CETTE RECETTE'}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -3434,13 +3471,9 @@ function TabRecettes({T,coffee,setCoffee}){
   const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
 
   const handleSaveRecipe=(recipe)=>{
-    const name=window.prompt('Nom de la recette (laisse vide pour conserver le titre par défaut) :', recipe.title)
-    if(name===null) return false
-    const finalTitle=(name||'').trim()||recipe.title
     const saved={
       ...recipe,
       id:`saved-${Date.now()}`,
-      title:finalTitle,
       badge:{type:'standard',label:'⭐ Sauvegardée'},
       savedAt:Date.now(),
     }
