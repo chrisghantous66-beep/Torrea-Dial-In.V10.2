@@ -3732,12 +3732,13 @@ function TabBoutique({ T }) {
   )
   return (
     <div>
-      <div style={card(T)}>
-        <div style={SL(T)}>Boutique Torrea</div>
-        <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>
-          Découvrez notre sélection de cafés artisanaux, torréfiés en France.
-        </div>
-      </div>
+      <Btn
+        href="https://torrea.fr/"
+        icon="🛒"
+        title="Boutique TORREA"
+        subtitle="Découvrez notre sélection de cafés artisanaux, torréfiés en France"
+        color={T.gold}
+      />
       <Btn
         href="https://trouvons-ton-cafe-ideal.vercel.app/"
         icon="✨"
