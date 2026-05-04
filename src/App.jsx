@@ -280,6 +280,9 @@ function µmToSetting(µm, g) {
 }
 
 // ─── ALGORITHMES ──────────────────────────────────────────────────────────────
+// Ajustements progressifs : 1 clic (faible écart) · 2 clics (écart modéré) · 3 clics (grand écart)
+function devToClicks(dev) { return dev < 0.25 ? 1 : dev < 0.65 ? 2 : 3 }
+
 function computeDialIn({ method, doseG, yieldG, extractionTimeSec, currentGrindµm }) {
   const m = BREW_METHODS[method]
   if (!m || !doseG || !yieldG || !extractionTimeSec) return null
@@ -292,11 +295,11 @@ function computeDialIn({ method, doseG, yieldG, extractionTimeSec, currentGrind�
   const ratioHigh=ratio>m.targetRatioMax, ratioLow=ratio<m.targetRatioMin
   const ratioRange=m.targetRatioMax-m.targetRatioMin
   // Priorité : ratio → temps (ne jamais décider uniquement sur le temps)
+  // Amplitude : toujours 1–3 clics (5–15µm) par itération
   if (ratioHigh) {
     // Cas 1 : ratio trop élevé → café coule trop vite → moudre plus fin
-    const excess=(ratio-m.targetRatioMax)/ratioRange
-    delta=-Math.round(excess*60+15)
-    if(fast) delta-=Math.round(((m.targetTimeMin-extractionTimeSec)/m.targetTimeMin)*30+5)
+    const clicks=devToClicks((ratio-m.targetRatioMax)/ratioRange)
+    delta=-(clicks*5)
     dir='finer'
     reasons.push(fast
       ? `Extraction trop ouverte (ratio 1:${ratio.toFixed(1)}) et trop rapide (${formatTime(extractionTimeSec)}) — mouture trop grossière`
@@ -305,9 +308,8 @@ function computeDialIn({ method, doseG, yieldG, extractionTimeSec, currentGrind�
         : `Extraction trop ouverte — ratio 1:${ratio.toFixed(1)} >> cible 1:${m.targetRatioMax}, café s'écoule trop librement`)
   } else if (ratioLow) {
     // Cas 4 : ratio trop faible → extraction trop restrictive → moudre plus grossier
-    const deficit=(m.targetRatioMin-ratio)/ratioRange
-    delta=Math.round(deficit*60+15)
-    if(slow) delta+=Math.round(((extractionTimeSec-m.targetTimeMax)/m.targetTimeMax)*30+5)
+    const clicks=devToClicks((m.targetRatioMin-ratio)/ratioRange)
+    delta=clicks*5
     dir='coarser'
     reasons.push(slow
       ? `Ratio insuffisant (1:${ratio.toFixed(1)}) et trop lent (${formatTime(extractionTimeSec)}) — mouture trop fine`
@@ -316,12 +318,14 @@ function computeDialIn({ method, doseG, yieldG, extractionTimeSec, currentGrind�
         : `Extraction trop restrictive — ratio 1:${ratio.toFixed(1)} << cible 1:${m.targetRatioMin}`)
   } else if (fast) {
     // Cas 2 : ratio OK mais trop rapide → sous-extraction → plus fin
-    delta=-Math.round(((m.targetTimeMin-extractionTimeSec)/m.targetTimeMin)*80+10)
+    const clicks=devToClicks((m.targetTimeMin-extractionTimeSec)/m.targetTimeMin)
+    delta=-(clicks*5)
     dir='finer'
     reasons.push(`Sous-extraction — ratio correct mais trop rapide (${formatTime(extractionTimeSec)})`)
   } else if (slow) {
     // Cas 3 : ratio OK mais trop lent → sur-extraction → plus grossier
-    delta=Math.round(((extractionTimeSec-m.targetTimeMax)/m.targetTimeMax)*80+10)
+    const clicks=devToClicks((extractionTimeSec-m.targetTimeMax)/m.targetTimeMax)
+    delta=clicks*5
     dir='coarser'
     reasons.push(`Sur-extraction — ratio correct mais trop lent (${formatTime(extractionTimeSec)})`)
   }
