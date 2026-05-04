@@ -3433,7 +3433,7 @@ function SavedRecipesPanel({savedRecipes,onDelete,T,grinder}){
       <div onClick={()=>!empty&&setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 14px',cursor:empty?'default':'pointer',background:`${T.gold}10`}}>
         <div style={{minWidth:0,flex:1}}>
           <div style={{fontSize:12,letterSpacing:'0.2em',textTransform:'uppercase',color:T.gold,fontWeight:700}}>⭐ Mes recettes ({count})</div>
-          <div style={{fontSize:10,color:T.textDim,marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{empty?'Sauvegarde une recette pour la retrouver ici':`${count} recette${count>1?'s':''} pour cette méthode`}</div>
+          <div style={{fontSize:10,color:T.textDim,marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{empty?'Sauvegarde une recette pour la retrouver ici':`${count} recette${count>1?'s':''} sauvegardée${count>1?'s':''}`}</div>
         </div>
         {!empty&&<div style={{fontSize:18,color:T.gold,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',flexShrink:0,marginLeft:8}}>▾</div>}
       </div>
@@ -3466,7 +3466,6 @@ function TabRecettes({T,coffee,setCoffee}){
   useEffect(()=>{try{localStorage.setItem(SAVED_RECIPES_KEY,JSON.stringify(savedRecipes))}catch{}},[savedRecipes])
 
   const recipes=RECIPES.filter(r=>r.method===active)
-  const savedForMethod=savedRecipes.filter(r=>r.method===active)
   const activeM=METHODS.find(m=>m.id===active)
   const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
 
@@ -3534,7 +3533,7 @@ function TabRecettes({T,coffee,setCoffee}){
           <RecipeGenerator methodId={active} coffee={coffee} setCoffee={setCoffee} grinderId={grinderId} T={T} onSave={handleSaveRecipe}/>
         </div>
         <div style={{flex:'1 1 280px',minWidth:0}}>
-          <SavedRecipesPanel savedRecipes={savedForMethod} onDelete={handleDeleteSaved} T={T} grinder={grinder}/>
+          <SavedRecipesPanel savedRecipes={savedRecipes} onDelete={handleDeleteSaved} T={T} grinder={grinder}/>
         </div>
       </div>
 
