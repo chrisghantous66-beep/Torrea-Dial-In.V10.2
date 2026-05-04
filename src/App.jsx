@@ -289,10 +289,42 @@ function computeDialIn({ method, doseG, yieldG, extractionTimeSec, currentGrind�
   const score = Math.round((rS*0.45+tS*0.55)*100)
   let delta=0, dir=null, reasons=[]
   const fast=extractionTimeSec<m.targetTimeMin, slow=extractionTimeSec>m.targetTimeMax
-  if (fast)  { delta -= Math.round(((m.targetTimeMin-extractionTimeSec)/m.targetTimeMin)*80+10); dir='finer';   reasons.push(`Trop rapide (${formatTime(extractionTimeSec)})`) }
-  if (slow)  { delta += Math.round(((extractionTimeSec-m.targetTimeMax)/m.targetTimeMax)*80+10); dir='coarser'; reasons.push(`Trop lent (${formatTime(extractionTimeSec)})`) }
-  if (ratio<m.targetRatioMin&&!fast){delta-=10;if(!dir)dir='finer'}
-  if (ratio>m.targetRatioMax&&!slow){delta+=10;if(!dir)dir='coarser'}
+  const ratioHigh=ratio>m.targetRatioMax, ratioLow=ratio<m.targetRatioMin
+  const ratioRange=m.targetRatioMax-m.targetRatioMin
+  // Priorité : ratio → temps (ne jamais décider uniquement sur le temps)
+  if (ratioHigh) {
+    // Cas 1 : ratio trop élevé → café coule trop vite → moudre plus fin
+    const excess=(ratio-m.targetRatioMax)/ratioRange
+    delta=-Math.round(excess*60+15)
+    if(fast) delta-=Math.round(((m.targetTimeMin-extractionTimeSec)/m.targetTimeMin)*30+5)
+    dir='finer'
+    reasons.push(fast
+      ? `Extraction trop ouverte (ratio 1:${ratio.toFixed(1)}) et trop rapide (${formatTime(extractionTimeSec)}) — mouture trop grossière`
+      : slow
+        ? `Extraction trop ouverte (ratio 1:${ratio.toFixed(1)}) malgré un temps long (${formatTime(extractionTimeSec)}) — vérifier la recette`
+        : `Extraction trop ouverte — ratio 1:${ratio.toFixed(1)} >> cible 1:${m.targetRatioMax}, café s'écoule trop librement`)
+  } else if (ratioLow) {
+    // Cas 4 : ratio trop faible → extraction trop restrictive → moudre plus grossier
+    const deficit=(m.targetRatioMin-ratio)/ratioRange
+    delta=Math.round(deficit*60+15)
+    if(slow) delta+=Math.round(((extractionTimeSec-m.targetTimeMax)/m.targetTimeMax)*30+5)
+    dir='coarser'
+    reasons.push(slow
+      ? `Ratio insuffisant (1:${ratio.toFixed(1)}) et trop lent (${formatTime(extractionTimeSec)}) — mouture trop fine`
+      : fast
+        ? `Ratio insuffisant (1:${ratio.toFixed(1)}) malgré un temps court (${formatTime(extractionTimeSec)}) — vérifier la recette`
+        : `Extraction trop restrictive — ratio 1:${ratio.toFixed(1)} << cible 1:${m.targetRatioMin}`)
+  } else if (fast) {
+    // Cas 2 : ratio OK mais trop rapide → sous-extraction → plus fin
+    delta=-Math.round(((m.targetTimeMin-extractionTimeSec)/m.targetTimeMin)*80+10)
+    dir='finer'
+    reasons.push(`Sous-extraction — ratio correct mais trop rapide (${formatTime(extractionTimeSec)})`)
+  } else if (slow) {
+    // Cas 3 : ratio OK mais trop lent → sur-extraction → plus grossier
+    delta=Math.round(((extractionTimeSec-m.targetTimeMax)/m.targetTimeMax)*80+10)
+    dir='coarser'
+    reasons.push(`Sur-extraction — ratio correct mais trop lent (${formatTime(extractionTimeSec)})`)
+  }
   const ng = clamp(Math.round((currentGrindµm+delta)/5)*5, m.grindRangeµm[0], m.grindRangeµm[1])
   return { score, ratioScore:Math.round(rS*100), timeScore:Math.round(tS*100), ratio, grindDelta:ng-currentGrindµm, newGrind:ng, dir, steps:Math.round(Math.abs(delta)/5), reasons, isPerfect:score>=90 }
 }
@@ -1582,11 +1614,9 @@ function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose,
             <div style={{fontFamily:'monospace',fontSize:11,color:T.textDim,marginBottom:10}}>
               {grind}µm → {result.newGrind}µm ({result.grindDelta>0?'+':''}{result.grindDelta}µm · {result.steps} clics)
             </div>
-            {result.reasons.map((r,i)=>{
-              const isTime=r.includes('rapide')||r.includes('lent')
-              const explain=r.includes('rapide')?' — eau passe trop vite, mouture trop grossière':r.includes('lent')?' — eau résiste trop, mouture trop fine':''
-              return <div key={i} style={{fontFamily:'monospace',fontSize:10,color:T.textDim,background:T.bg,border:`1px solid ${T.border}`,padding:'5px 10px',borderRadius:3,display:'block',marginBottom:5}}>{r}{isTime&&<span style={{color:T.textMute}}>{explain}</span>}</div>
-            })}
+            {result.reasons.map((r,i)=>(
+              <div key={i} style={{fontFamily:'monospace',fontSize:10,color:T.textDim,background:T.bg,border:`1px solid ${T.border}`,padding:'5px 10px',borderRadius:3,display:'block',marginBottom:5}}>{r}</div>
+            ))}
             {!hasConflict&&<button onClick={applyResult} style={{marginTop:12,padding:'13px 20px',border:`1px solid ${mc}`,background:`${mc}22`,color:mc,borderRadius:4,cursor:'pointer',fontSize:13,letterSpacing:'0.1em',fontWeight:700,width:'100%',touchAction:'manipulation'}}>⬤ APPLIQUER → {result.newGrind}µm</button>}
           </>
         }
