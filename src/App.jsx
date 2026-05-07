@@ -2008,9 +2008,7 @@ function CoffeeInvaders({ onClose, T }) {
       if(keys['arrowleft'] || keys['a'] || (cm === 'buttons' && t.left)) player.x -= player.speed
       if(keys['arrowright'] || keys['d'] || (cm === 'buttons' && t.right)) player.x += player.speed
       if(cm === 'swipe' && t.dragging && t.targetX != null) {
-        const dx = t.targetX - (player.x + player.w/2)
-        const max = player.speed * 1.7
-        if(Math.abs(dx) > 0.5) player.x += Math.max(-max, Math.min(max, dx))
+        player.x = t.targetX - player.w/2
       }
       player.x = Math.max(0, Math.min(W - player.w, player.x))
 
@@ -2392,7 +2390,6 @@ function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, se
   const piType=machine.piType
   const titleClickRef=useRef({count:0,lastTime:0})
   const onTitleClick=()=>{
-    if(piType!=='programmable')return
     const now=Date.now(),ref=titleClickRef.current
     if(now-ref.lastTime>1500)ref.count=0
     ref.count++;ref.lastTime=now
@@ -3091,12 +3088,56 @@ const GEN_METHODS = {
   'chemex':       { ratioBase:16.5, grindBase:750,  tempBase:94, totalSec:280, dose:30 },
   'french-press': { ratioBase:16,   grindBase:900,  tempBase:94, totalSec:540, dose:30 },
   'aeropress':    { ratioBase:14,   grindBase:600,  tempBase:88, totalSec:120, dose:14 },
+  'fellow-aiden': { ratioBase:16,   grindBase:750,  tempBase:93, totalSec:240, dose:18 },
   'drip':         { ratioBase:16,   grindBase:700,  tempBase:93, totalSec:300, dose:30 },
   'kalita':       { ratioBase:17,   grindBase:700,  tempBase:94, totalSec:200, dose:20 },
   'origami':      { ratioBase:16,   grindBase:700,  tempBase:93, totalSec:200, dose:16 },
   'syphon':       { ratioBase:13,   grindBase:600,  tempBase:92, totalSec:80,  dose:23 },
   'cold-brew':    { ratioBase:8,    grindBase:1050, tempBase:20, totalSec:50400, dose:80 },
   'turkish':      { ratioBase:13,   grindBase:90,   tempBase:85, totalSec:210, dose:8  },
+}
+
+// Sélection d'un profil expert Fellow Aiden + adaptation selon café et objectif
+function fellowAidenProfile({roast,profile,intensity,coffee}){
+  const proc=String(coffee?.process||'').toLowerCase()
+  const isWashed=/lav|wash/.test(proc)
+  const isNatural=/nat/.test(proc)
+  const isHoney=/honey/.test(proc)
+  const isAnaero=/ana|ferment/.test(proc)
+  const ids=profile.ids||[]
+  const wantsClarity=ids.some(id=>['fruity','citrus','floral'].includes(id))
+  const wantsBody=ids.includes('chocolate')
+  const wantsSweet=ids.includes('sweet')
+  // 5 profils experts (cf. base profils Fellow Aiden)
+  let p
+  if(roast.id==='dark'){
+    p={name:'Medium-Dark Balanced',bloomRatio:2,bloomSec:28,pulses:2,flowStart:14,flowEnd:15,tempStart:92,tempEnd:90,pauseSec:8}
+  }else if(isWashed && wantsClarity){
+    p={name:'Washed Clarity',bloomRatio:3,bloomSec:30,pulses:2,flowStart:16,flowEnd:18,tempStart:94,tempEnd:94,pauseSec:6}
+  }else if(isNatural || isHoney){
+    p={name:'Natural Sweetness & Body',bloomRatio:2.5,bloomSec:48,pulses:3,flowStart:12,flowEnd:14,tempStart:94.5,tempEnd:92,pauseSec:10}
+  }else if(wantsClarity && (wantsSweet || wantsBody)){
+    p={name:'Hybrid Sweet Clarity (Onyx)',bloomRatio:3,bloomSec:50,pulses:3,flowStart:13,flowEnd:17,tempStart:94.5,tempEnd:91.5,pauseSec:8}
+  }else if(roast.id==='light'){
+    p={name:'Competition Modern',bloomRatio:3,bloomSec:40,pulses:3,flowStart:11,flowEnd:16,tempStart:96,tempEnd:93,pauseSec:8}
+  }else{
+    p={name:'Medium-Dark Balanced',bloomRatio:2,bloomSec:28,pulses:2,flowStart:14,flowEnd:15,tempStart:92,tempEnd:90,pauseSec:8}
+  }
+  // Adaptations
+  if(roast.id==='light'){p.tempStart+=1;p.tempEnd+=1}
+  if(roast.id==='dark'){p.tempStart-=1.5;p.tempEnd-=1.5}
+  if(isAnaero){p.tempStart-=0.5;p.tempEnd-=0.5;p.bloomSec=Math.max(p.bloomSec,40)}
+  if(wantsClarity){p.flowStart+=1;p.flowEnd+=1;p.pauseSec=Math.max(4,p.pauseSec-2)}
+  if(wantsBody){p.flowStart-=1;p.flowEnd-=1;p.pauseSec+=2}
+  if(wantsSweet){p.bloomSec+=5}
+  if(intensity.id==='strong'){p.flowStart-=0.5;p.flowEnd-=0.5}
+  if(intensity.id==='mild'){p.flowStart+=0.5;p.flowEnd+=0.5}
+  // Sécurité
+  p.flowStart=Math.max(8,Math.min(20,p.flowStart))
+  p.flowEnd=Math.max(8,Math.min(20,p.flowEnd))
+  p.tempStart=Math.max(85,Math.min(98,p.tempStart))
+  p.tempEnd=Math.max(85,Math.min(98,p.tempEnd))
+  return p
 }
 
 const STEP_BUILDERS = {
@@ -3150,6 +3191,35 @@ const STEP_BUILDERS = {
       {time:'1:30',  instruction:inverted?'Retourner sur la tasse. Presser doucement (~30 sec).':'Presser doucement (~30 sec).'},
       {time:'2:00',  instruction:'Fin de l\'extraction.'},
     ]
+  },
+  'fellow-aiden': ({dose,water,temp,grindµm,roast,profile,intensity,coffee})=>{
+    const profileSel=fellowAidenProfile({roast,profile,intensity,coffee})
+    const {bloomRatio,bloomSec,pulses,flowStart,flowEnd,tempStart,tempEnd,pauseSec,name}=profileSel
+    const bloomG=Math.round(dose*bloomRatio)
+    const remain=water-bloomG
+    const perPulse=Math.round(remain/pulses)
+    const stepFlow=pulses>1?(flowEnd-flowStart)/(pulses-1):0
+    const stepTemp=pulses>1?(tempEnd-tempStart)/(pulses-1):0
+    const fmt=(sec)=>{const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}:${String(s).padStart(2,'0')}`}
+    const steps=[
+      {time:'Avant', instruction:`Fellow Aiden — profil « ${name} ». ${dose} g · ${grindµm} µm · filtre rincé.`},
+      {time:'Bloom', instruction:`Verser ${bloomG} g à ${Math.round(tempStart)}°C (ratio 1:${bloomRatio}) · pause ${bloomSec}s.`},
+    ]
+    let cursor=bloomSec
+    for(let i=0;i<pulses;i++){
+      const flow=Math.round((flowStart+stepFlow*i)*10)/10
+      const t=Math.round((tempStart+stepTemp*i)*10)/10
+      const g=i===pulses-1?(remain-perPulse*(pulses-1)):perPulse
+      const dur=Math.max(3,Math.round(g/flow))
+      steps.push({time:fmt(cursor), instruction:`Pulse ${i+1} : ${g} g à ${t}°C · flow ${flow} ml/s (~${dur}s).`})
+      cursor+=dur
+      if(i<pulses-1){
+        steps.push({time:fmt(cursor), instruction:`Pause ${pauseSec}s — laisser percoler.`})
+        cursor+=pauseSec
+      }
+    }
+    steps.push({time:fmt(cursor), instruction:`Fin du tirage · total ~${fmt(cursor)} · ${water} g extraits.`})
+    return steps
   },
   drip: ({dose,water,temp,grindµm})=>([
     {time:'Avant',    instruction:`Préchauffer la machine. Filtre rincé. ${grindµm} µm.`},
@@ -3209,6 +3279,18 @@ const STEP_BUILDERS = {
 
 function buildGenTip({methodId,coffee,roast,profile,intensity}){
   const parts=[]
+  if(methodId==='fellow-aiden'){
+    const fap=fellowAidenProfile({roast,profile,intensity,coffee})
+    parts.push(`Profil expert : « ${fap.name} ».`)
+    if(coffee?.process) parts.push(`Adapté process ${coffee.process}.`)
+    parts.push(`Bloom 1:${fap.bloomRatio}/${fap.bloomSec}s · ${fap.pulses} pulse${fap.pulses>1?'s':''} · flow ${fap.flowStart}→${fap.flowEnd} ml/s · pause ${fap.pauseSec}s.`)
+    if(roast.id==='light') parts.push("Light → température amplifiée, extraction progressive.")
+    if(roast.id==='dark')  parts.push('Dark → température abaissée, extraction réduite.')
+    if(intensity.id==='strong') parts.push('Ratio resserré · corps et intensité.')
+    if(intensity.id==='mild')   parts.push('Ratio dilué · clarté et longueur.')
+    parts.push('Résultat attendu : extraction progressive multi-phase, reproductible et alignée à l\'objectif sensoriel.')
+    return parts.join(' ')
+  }
   if(coffee?.name) parts.push(`Optimisé pour ${coffee.name}${coffee.country?` (${coffee.country})`:''}.`)
   if(coffee?.process) parts.push(`Process ${coffee.process}.`)
   parts.push(`Profil ${roast.label} · ${profile.label} · ${intensity.label}.`)
@@ -3247,7 +3329,7 @@ function generateRecipe({methodId,coffee,roastId,profileIds,intensityId,grinderI
     : clamp(base.tempBase+roast.tempDelta+profile.tempDelta, 70, 100)
 
   const builder=STEP_BUILDERS[methodId]||STEP_BUILDERS.v60
-  const steps=builder({dose,water,ratio,temp,grindµm,roast,profile,intensity})
+  const steps=builder({dose,water,ratio,temp,grindµm,roast,profile,intensity,coffee})
 
   const grinder=GRINDERS[grinderId]
   const native=grinder&&grinder.label!=='— Sélectionner un moulin —'?µmToSetting(grindµm,grinder):null

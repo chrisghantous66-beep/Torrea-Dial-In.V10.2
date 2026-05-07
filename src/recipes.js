@@ -7,6 +7,7 @@ export const METHODS = [
   { id: 'chemex',     label: 'Chemex',            desc: 'Pour-over à filtre épais' },
   { id: 'french-press', label: 'French Press',   desc: 'Cafetière à piston' },
   { id: 'aeropress',  label: 'AeroPress',         desc: 'Pression manuelle' },
+  { id: 'fellow-aiden',label: 'Fellow Aiden',     desc: 'Cafetière filtre Precision — multi-phase (bloom + pulses)' },
   { id: 'drip',       label: 'Filtre auto',       desc: 'Cafetière filtre automatique' },
   { id: 'kalita',     label: 'Kalita Wave',       desc: 'Pour-over à fond plat' },
   { id: 'origami',    label: 'Origami',           desc: 'Pour-over flexible (V60/Wave)' },
