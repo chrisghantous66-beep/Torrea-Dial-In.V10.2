@@ -155,9 +155,18 @@ const STORAGE_KEY = 'torrea_v3'
 const COFFEE_LIB_KEY = 'torrea_coffees'
 const PARAMS_KEY = 'torrea_params_v1'
 const SAVED_RECIPES_KEY = 'torrea_saved_recipes_v1'
-const WELCOME_KEY = 'torrea_welcome_v1'
+const WELCOME_KEY = 'torrea_welcome_v2'
+const FAV_GRINDERS_KEY = 'torrea_fav_grinders_v1'
+const FAV_MACHINES_KEY = 'torrea_fav_machines_v1'
 function loadSavedParams() {
   try { return JSON.parse(localStorage.getItem(PARAMS_KEY)||'{}') } catch { return {} }
+}
+function useFavorites(storageKey) {
+  const [favs,setFavs]=useState(()=>{try{const s=localStorage.getItem(storageKey);return s?JSON.parse(s):[]}catch{return[]}})
+  useEffect(()=>{try{localStorage.setItem(storageKey,JSON.stringify(favs))}catch{}},[favs,storageKey])
+  const toggle=(id)=>setFavs(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])
+  const isFav=(id)=>favs.includes(id)
+  return {favs,toggle,isFav}
 }
 
 // ─── CATALOGUE TORREA ─────────────────────────────────────────────────────────
@@ -977,7 +986,9 @@ function GrinderSelector({ grinderId, setGrinderId, method, grindValue, setGrind
   const g=GRINDERS[grinderId]
   const range=g&&g[method]?g[method]:null
   const has=grinderId!=='none'
+  const {favs,toggle:toggleFav,isFav}=useFavorites(FAV_GRINDERS_KEY)
   const brands=['Breville (Sage)','Baratza','Mahlkönig','Eureka','Niche','Comandante','1Zpresso','Timemore','Fellow','Wilfa','Hario','Porlex','Kinu','Rancilio',"De'Longhi",'Weber','Lagom','Turin/DF','Mazzer','Capresso']
+  const favEntries=favs.map(id=>[id,GRINDERS[id]]).filter(([,v])=>v)
 
   return (
     <div style={card(T)}>
@@ -991,6 +1002,20 @@ function GrinderSelector({ grinderId, setGrinderId, method, grindValue, setGrind
           {range&&<div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:3}}>Plage {method} : {range[0]}–{range[1]} {g.unit||'µm'}</div>}
         </div>
       )}
+      {!open&&favEntries.length>0&&(
+        <div style={{marginTop:10,display:'flex',gap:6,flexWrap:'wrap'}}>
+          {favEntries.map(([id,v])=>(
+            <button key={id} onClick={(e)=>{e.stopPropagation();setGrinderId(id)}} style={{
+              padding:'5px 10px',fontSize:10,fontFamily:'monospace',
+              border:`1px solid ${grinderId===id?T.gold:`${T.gold}55`}`,
+              background:grinderId===id?`${T.gold}22`:`${T.gold}0a`,
+              color:grinderId===id?T.gold:T.textDim,
+              borderRadius:14,cursor:'pointer',touchAction:'manipulation',
+              fontWeight:grinderId===id?700:400,
+            }}>★ {v.label}</button>
+          ))}
+        </div>
+      )}
       {open&&(
         <div style={{marginTop:14}}>
           <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:10}}>Sélectionner le moulin</div>
@@ -998,17 +1023,34 @@ function GrinderSelector({ grinderId, setGrinderId, method, grindValue, setGrind
           <button onClick={()=>{setGrinderId('none');setOpen(false)}} style={{width:'100%',textAlign:'left',padding:'9px 12px',marginBottom:8,background:grinderId==='none'?`${T.gold}18`:T.bg3,border:`1px solid ${grinderId==='none'?T.gold:T.border}`,borderRadius:5,color:grinderId==='none'?T.gold:T.textDim,cursor:'pointer',fontSize:12,touchAction:'manipulation'}}>
             — Sélectionner un moulin —
           </button>
+          {favEntries.length>0&&(
+            <div>
+              <div style={{fontSize:9,letterSpacing:'0.3em',color:T.gold,textTransform:'uppercase',marginTop:10,marginBottom:5,paddingLeft:8,borderLeft:`2px solid ${T.gold}`}}>★ Favoris</div>
+              {favEntries.map(([id,v])=>(
+                <div key={id} style={{display:'flex',alignItems:'stretch',marginBottom:4}}>
+                  <button onClick={()=>{setGrinderId(id);setOpen(false)}} style={{flex:1,textAlign:'left',padding:'9px 12px',background:grinderId===id?`${T.gold}18`:T.bg3,border:`1px solid ${grinderId===id?T.gold:T.border}`,borderRadius:'5px 0 0 5px',borderRight:'none',color:grinderId===id?T.gold:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                    <span style={{fontWeight:grinderId===id?700:400}}>{v.label}{v.brand?` — ${v.brand}`:''}</span>
+                    {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                  </button>
+                  <button onClick={(e)=>{e.stopPropagation();toggleFav(id)}} style={{padding:'0 12px',background:`${T.gold}18`,border:`1px solid ${T.gold}`,borderRadius:'0 5px 5px 0',color:T.gold,cursor:'pointer',fontSize:14,touchAction:'manipulation'}}>★</button>
+                </div>
+              ))}
+            </div>
+          )}
           {brands.map(brand=>{
             const entries=Object.entries(GRINDERS).filter(([,v])=>v.brand===brand)
             if(!entries.length) return null
             return (
               <div key={brand}>
-                <div style={{fontSize:9,letterSpacing:'0.3em',color:T.textMute,textTransform:'uppercase',marginTop:10,marginBottom:5,paddingLeft:2,borderLeft:`2px solid ${T.gold}44`,paddingLeft:8}}>{brand}</div>
+                <div style={{fontSize:9,letterSpacing:'0.3em',color:T.textMute,textTransform:'uppercase',marginTop:10,marginBottom:5,borderLeft:`2px solid ${T.gold}44`,paddingLeft:8}}>{brand}</div>
                 {entries.map(([k,v])=>(
-                  <button key={k} onClick={()=>{setGrinderId(k);setOpen(false)}} style={{width:'100%',textAlign:'left',padding:'9px 12px',marginBottom:4,background:grinderId===k?`${T.gold}18`:T.bg3,border:`1px solid ${grinderId===k?T.gold:T.border}`,borderRadius:5,color:grinderId===k?T.gold:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
-                    <span style={{fontWeight:grinderId===k?700:400}}>{v.label}</span>
-                    {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
-                  </button>
+                  <div key={k} style={{display:'flex',alignItems:'stretch',marginBottom:4}}>
+                    <button onClick={()=>{setGrinderId(k);setOpen(false)}} style={{flex:1,textAlign:'left',padding:'9px 12px',background:grinderId===k?`${T.gold}18`:T.bg3,border:`1px solid ${grinderId===k?T.gold:T.border}`,borderRadius:'5px 0 0 5px',borderRight:'none',color:grinderId===k?T.gold:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                      <span style={{fontWeight:grinderId===k?700:400}}>{v.label}</span>
+                      {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                    </button>
+                    <button onClick={(e)=>{e.stopPropagation();toggleFav(k)}} style={{padding:'0 12px',background:isFav(k)?`${T.gold}18`:T.bg3,border:`1px solid ${isFav(k)?T.gold:T.border}`,borderLeft:'none',borderRadius:'0 5px 5px 0',color:isFav(k)?T.gold:T.textMute,cursor:'pointer',fontSize:14,touchAction:'manipulation'}} title={isFav(k)?'Retirer des favoris':'Ajouter aux favoris'}>{isFav(k)?'★':'☆'}</button>
+                  </div>
                 ))}
               </div>
             )
@@ -2326,6 +2368,8 @@ function CoffeeInvaders({ onClose, T }) {
 function MachineSelector({ machineId, setMachineId, T }) {
   const [open,setOpen]=useState(false)
   const m = getMachine(machineId)
+  const {favs,toggle:toggleFav,isFav}=useFavorites(FAV_MACHINES_KEY)
+  const favEntries=favs.map(id=>[id,MACHINES[id]]).filter(([,v])=>v)
   return (
     <div style={card(T)}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}} onClick={()=>setOpen(o=>!o)}>
@@ -2336,6 +2380,20 @@ function MachineSelector({ machineId, setMachineId, T }) {
         <div style={{marginTop:8}}>
           <div style={{fontFamily:'monospace',fontSize:12,color:MC,fontWeight:700}}>{m.label}{m.brand?` — ${m.brand}`:''}</div>
           {m.description&&<div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:3}}>{m.description}</div>}
+        </div>
+      )}
+      {!open&&favEntries.length>0&&(
+        <div style={{marginTop:10,display:'flex',gap:6,flexWrap:'wrap'}}>
+          {favEntries.map(([id,v])=>(
+            <button key={id} onClick={(e)=>{e.stopPropagation();setMachineId(id)}} style={{
+              padding:'5px 10px',fontSize:10,fontFamily:'monospace',
+              border:`1px solid ${machineId===id?MC:`${MC}55`}`,
+              background:machineId===id?`${MC}22`:`${MC}0a`,
+              color:machineId===id?MC:T.textDim,
+              borderRadius:14,cursor:'pointer',touchAction:'manipulation',
+              fontWeight:machineId===id?700:400,
+            }}>★ {v.label}</button>
+          ))}
         </div>
       )}
       {open&&(
@@ -2358,6 +2416,21 @@ function MachineSelector({ machineId, setMachineId, T }) {
             {machineId==='classic_other'&&<span style={{color:MC,fontWeight:700,fontSize:14}}>✓</span>}
           </button>
           <div style={{borderTop:`1px solid ${T.border}`,marginBottom:10}}/>
+          {favEntries.length>0&&(
+            <div>
+              <div style={{fontSize:9,letterSpacing:'0.3em',color:MC,textTransform:'uppercase',marginTop:0,marginBottom:5,paddingLeft:8,borderLeft:`2px solid ${MC}`}}>★ Favoris</div>
+              {favEntries.map(([id,v])=>(
+                <div key={id} style={{display:'flex',alignItems:'stretch',marginBottom:4}}>
+                  <button onClick={()=>{setMachineId(id);setOpen(false)}} style={{flex:1,textAlign:'left',padding:'9px 12px',background:machineId===id?`${MC}18`:T.bg3,border:`1px solid ${machineId===id?MC:T.border}`,borderRadius:'5px 0 0 5px',borderRight:'none',color:machineId===id?MC:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                    <span style={{fontWeight:machineId===id?700:400}}>{v.label}{v.brand?` — ${v.brand}`:''}</span>
+                    {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                  </button>
+                  <button onClick={(e)=>{e.stopPropagation();toggleFav(id)}} style={{padding:'0 12px',background:`${MC}18`,border:`1px solid ${MC}`,borderLeft:'none',borderRadius:'0 5px 5px 0',color:MC,cursor:'pointer',fontSize:14,touchAction:'manipulation'}}>★</button>
+                </div>
+              ))}
+              <div style={{borderTop:`1px solid ${T.border}`,marginTop:8,marginBottom:8}}/>
+            </div>
+          )}
           {MACHINE_CATEGORIES.map(cat=>{
             const entries=Object.entries(MACHINES).filter(([,v])=>v.piType===cat.piType)
             if(!entries.length) return null
@@ -2365,10 +2438,13 @@ function MachineSelector({ machineId, setMachineId, T }) {
               <div key={cat.piType}>
                 <div style={{fontSize:9,letterSpacing:'0.3em',color:T.textMute,textTransform:'uppercase',marginTop:10,marginBottom:5,paddingLeft:8,borderLeft:`2px solid ${MC}44`}}>{cat.label}</div>
                 {entries.map(([k,v])=>(
-                  <button key={k} onClick={()=>{setMachineId(k);setOpen(false)}} style={{width:'100%',textAlign:'left',padding:'9px 12px',marginBottom:4,background:machineId===k?`${MC}18`:T.bg3,border:`1px solid ${machineId===k?MC:T.border}`,borderRadius:5,color:machineId===k?MC:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
-                    <span style={{fontWeight:machineId===k?700:400}}>{v.label}{v.brand?` — ${v.brand}`:''}</span>
-                    {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
-                  </button>
+                  <div key={k} style={{display:'flex',alignItems:'stretch',marginBottom:4}}>
+                    <button onClick={()=>{setMachineId(k);setOpen(false)}} style={{flex:1,textAlign:'left',padding:'9px 12px',background:machineId===k?`${MC}18`:T.bg3,border:`1px solid ${machineId===k?MC:T.border}`,borderRadius:'5px 0 0 5px',borderRight:'none',color:machineId===k?MC:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                      <span style={{fontWeight:machineId===k?700:400}}>{v.label}{v.brand?` — ${v.brand}`:''}</span>
+                      {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                    </button>
+                    <button onClick={(e)=>{e.stopPropagation();toggleFav(k)}} style={{padding:'0 12px',background:isFav(k)?`${MC}18`:T.bg3,border:`1px solid ${isFav(k)?MC:T.border}`,borderLeft:'none',borderRadius:'0 5px 5px 0',color:isFav(k)?MC:T.textMute,cursor:'pointer',fontSize:14,touchAction:'manipulation'}} title={isFav(k)?'Retirer des favoris':'Ajouter aux favoris'}>{isFav(k)?'★':'☆'}</button>
+                  </div>
                 ))}
               </div>
             )
@@ -3304,6 +3380,102 @@ function buildGenTip({methodId,coffee,roast,profile,intensity}){
   return parts.join(' ')
 }
 
+// ─── COACH IA — DIAGNOSTIC SCA ITÉRATIF ───────────────────────────────────────
+// Matrice de diagnostic basée sur les protocoles SCA (Specialty Coffee Association)
+// Chaque feedback renvoie UN seul ajustement principal (principe : ne change qu'une variable
+// à la fois pour identifier précisément ce qui marche).
+const TASTE_FEEDBACKS = [
+  {id:'sour',       label:'Acide / aigre',       icon:'🍋', desc:'Goût agressif, citrique, manque de sucre',           diagnosis:'sous-extraction',     color:'#f4b942'},
+  {id:'bitter',     label:'Amer / âpre',         icon:'⚡', desc:'Amertume marquée, sec en bouche',                    diagnosis:'sur-extraction',      color:'#a05a2c'},
+  {id:'weak',       label:'Fade / aqueux',       icon:'💧', desc:'Manque de corps, eau colorée',                       diagnosis:'sous-développé',      color:'#6ab4d4'},
+  {id:'astringent', label:'Astringent / sec',    icon:'🌿', desc:'Sensation râpeuse, langue qui sèche',                diagnosis:'sur-extraction sévère',color:'#8c4a3b'},
+  {id:'flat',       label:'Sans relief',         icon:'➖', desc:'Plat, peu d\'arômes, ennuyeux',                      diagnosis:'extraction insuffisante',color:'#9b8e7e'},
+  {id:'heavy',      label:'Trop intense / lourd',icon:'🛢', desc:'Trop concentré, écrasant',                           diagnosis:'ratio trop serré',    color:'#5d4037'},
+  {id:'perfect',    label:'Équilibré ✓',         icon:'⭐', desc:'Doux, sucré, arômes nets',                           diagnosis:'extraction réussie',  color:'#7fb069'},
+]
+
+// Applique UN ajustement à une recette générée.
+// Stratégies par défaut (alterne action si déjà tentée précédemment dans l'historique).
+function adjustRecipe({recipe,methodId,tasteId,coffee,history=[]}){
+  if(tasteId==='perfect') return null // pas d'ajustement
+  const base=GEN_METHODS[methodId]; if(!base||!recipe) return null
+
+  // Récupère valeurs courantes depuis la recette
+  const dose=parseFloat(String(recipe.params.coffee).replace(/[^\d.]/g,''))||base.dose
+  const water=parseFloat(String(recipe.params.water).replace(/[^\d.]/g,''))||Math.round(dose*base.ratioBase)
+  const ratio=water/dose
+  const temp=parseFloat(String(recipe.params.temperature).replace(/[^\d.]/g,''))||base.tempBase
+  const grindµm=recipe.grindµm||base.grindBase
+
+  // Compte combien de fois chaque type d'action a été tenté
+  const tries=(action)=>history.filter(h=>h.action===action).length
+
+  // Heuristique de choix d'action — alterne grind/temp/ratio pour ne pas marteler la même variable
+  const pickAction=(candidates)=>{
+    let best=candidates[0],min=tries(best)
+    for(const c of candidates){const n=tries(c);if(n<min){best=c;min=n}}
+    return best
+  }
+
+  let action,delta,newGrind=grindµm,newTemp=temp,newRatio=ratio,newDose=dose,reason='',advice=''
+
+  if(tasteId==='sour'){
+    action=pickAction(['grind','temp','ratio'])
+    if(action==='grind'){newGrind=clamp(grindµm-50,80,1400);delta=`-50 µm (mouture plus fine)`;reason='Sous-extraction → particules trop grosses, l\'eau ne pénètre pas assez le marc.';advice='Reserre la mouture pour augmenter la surface de contact.'}
+    else if(action==='temp'){newTemp=clamp(temp+2,70,100);delta=`+2°C (${Math.round(newTemp)}°C)`;reason='Sous-extraction → l\'eau plus chaude extrait davantage de composés sucrés.';advice='Augmente la température.'}
+    else {newRatio=clamp(ratio+0.5,5,22);delta=`ratio 1:${newRatio.toFixed(1)} (plus dilué)`;reason='Augmenter le ratio prolonge le contact eau-café.';advice='Allonge le ratio.'}
+  } else if(tasteId==='bitter'||tasteId==='astringent'){
+    const severe=tasteId==='astringent'
+    action=pickAction(severe?['grind','temp']:['grind','temp','ratio'])
+    if(action==='grind'){const step=severe?75:50;newGrind=clamp(grindµm+step,80,1400);delta=`+${step} µm (mouture plus grossière)`;reason=`${severe?'Sur-extraction sévère':'Sur-extraction'} → l\'eau extrait des composés amers et astringents.`;advice='Élargis la mouture pour ralentir l\'extraction.'}
+    else if(action==='temp'){newTemp=clamp(temp-2,70,100);delta=`-2°C (${Math.round(newTemp)}°C)`;reason='Sur-extraction → eau trop chaude qui sur-développe l\'amertume.';advice='Baisse la température.'}
+    else {newRatio=clamp(ratio-0.5,5,22);delta=`ratio 1:${newRatio.toFixed(1)} (plus serré)`;reason='Réduire le ratio raccourcit le temps d\'extraction.';advice='Resserre le ratio.'}
+  } else if(tasteId==='weak'||tasteId==='flat'){
+    action=pickAction(['grind','ratio','temp'])
+    if(action==='grind'){newGrind=clamp(grindµm-40,80,1400);delta=`-40 µm (mouture plus fine)`;reason='Extraction insuffisante → augmenter la surface de contact donne plus de corps.';advice='Affine la mouture.'}
+    else if(action==='ratio'){newRatio=clamp(ratio-1,5,22);delta=`ratio 1:${newRatio.toFixed(1)} (plus serré)`;reason='Trop dilué → resserre le ratio pour densifier la tasse.';advice='Resserre le ratio.'}
+    else {newTemp=clamp(temp+1.5,70,100);delta=`+1.5°C (${Math.round(newTemp*10)/10}°C)`;reason='Plus de chaleur → meilleure extraction des composés aromatiques.';advice='Augmente légèrement la température.'}
+  } else if(tasteId==='heavy'){
+    action=pickAction(['ratio','grind'])
+    if(action==='ratio'){newRatio=clamp(ratio+1,5,22);delta=`ratio 1:${newRatio.toFixed(1)} (plus dilué)`;reason='Tasse trop concentrée → allonger le ratio aère la finale.';advice='Allonge le ratio.'}
+    else {newGrind=clamp(grindµm+30,80,1400);delta=`+30 µm`;reason='Mouture plus grossière → extraction plus douce.';advice='Élargis la mouture.'}
+  }
+
+  // Recalcule water si ratio a changé
+  newDose=Math.round(dose*10)/10
+  const newWater=Math.round(newDose*newRatio)
+
+  // Reconstruit les steps avec les nouveaux paramètres
+  const roast={id:'medium',ratioDelta:0,grindDelta:0,tempDelta:0,label:'Medium'}
+  const profile={ids:['balanced'],label:'Balanced',tempDelta:0,grindDelta:0,ratioDelta:0}
+  const intensity={id:'balanced',ratioDelta:0,label:'Standard'}
+  const builder=STEP_BUILDERS[methodId]||STEP_BUILDERS.v60
+  const newSteps=builder({dose:newDose,water:newWater,ratio:newRatio,temp:newTemp,grindµm:newGrind,roast,profile,intensity,coffee})
+
+  return {
+    action,
+    delta,
+    reason,
+    advice,
+    recipe:{
+      ...recipe,
+      id:`coach-${methodId}-${Date.now()}`,
+      title:'Recette ajustée — Coach IA',
+      badge:{type:'generator',label:'🧠 Coach IA'},
+      params:{
+        ...recipe.params,
+        coffee:`${newDose} g`,
+        water:`${newWater} g`,
+        ratio:`1:${newRatio.toFixed(1)}`,
+        temperature:`${Math.round(newTemp*10)/10}°C`,
+      },
+      grindµm:newGrind,
+      steps:newSteps,
+      tip:`${reason} ${advice}`,
+    },
+  }
+}
+
 function generateRecipe({methodId,coffee,roastId,profileIds,intensityId,grinderId}){
   const base=GEN_METHODS[methodId]; if(!base) return null
   const roast    = ROAST_LEVELS.find(x=>x.id===roastId)    || ROAST_LEVELS[1]
@@ -3364,6 +3536,12 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
   const [justSaved,setJustSaved]=useState(false)
   const [savingMode,setSavingMode]=useState(false)
   const [customTitle,setCustomTitle]=useState('')
+  // Coach IA — actif par défaut sauvegardé en localStorage
+  const [coachOn,setCoachOn]=useState(()=>{try{return localStorage.getItem('torrea_coach_ia')==='1'}catch{return false}})
+  useEffect(()=>{try{localStorage.setItem('torrea_coach_ia',coachOn?'1':'0')}catch{}},[coachOn])
+  const [coachHistory,setCoachHistory]=useState([]) // [{action,delta,reason,advice,tasteId}]
+  const [showFeedback,setShowFeedback]=useState(false)
+  const [lastDiagnosis,setLastDiagnosis]=useState(null)
 
   const toggleProfile=(id)=>{
     setProfileIds(prev=>{
@@ -3377,6 +3555,26 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
     setGenerated(r)
     setJustSaved(false)
     setSavingMode(false)
+    setCoachHistory([])
+    setLastDiagnosis(null)
+    setShowFeedback(coachOn)
+  }
+
+  const handleFeedback=(tasteId)=>{
+    if(tasteId==='perfect'){
+      const fb=TASTE_FEEDBACKS.find(t=>t.id==='perfect')
+      setLastDiagnosis({tasteId,action:null,delta:null,reason:'Bravo — extraction réussie. Sauvegarde cette recette pour la retrouver !',advice:'',label:fb.label,icon:fb.icon,color:fb.color})
+      setShowFeedback(false)
+      return
+    }
+    const adj=adjustRecipe({recipe:generated,methodId,tasteId,coffee,history:coachHistory})
+    if(!adj) return
+    const fb=TASTE_FEEDBACKS.find(t=>t.id===tasteId)
+    setGenerated(adj.recipe)
+    setCoachHistory(prev=>[...prev,{tasteId,action:adj.action,delta:adj.delta,reason:adj.reason,advice:adj.advice,label:fb.label,icon:fb.icon,color:fb.color}])
+    setLastDiagnosis({tasteId,action:adj.action,delta:adj.delta,reason:adj.reason,advice:adj.advice,label:fb.label,icon:fb.icon,color:fb.color})
+    setJustSaved(false)
+    setShowFeedback(false)
   }
 
   const handleSave=()=>{
@@ -3407,14 +3605,46 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
     }}>{children}</button>
   )
 
+  // Couleur "neon" du Coach IA quand actif (pulse subtil via filter+box-shadow)
+  const COACH_C='#9b6bff'
+
   return (
-    <div style={{marginBottom:16,background:T.bg2,border:`1px solid ${T.gold}55`,borderRadius:10,boxShadow:`0 2px 8px ${T.shadow}`,overflow:'hidden'}}>
-      <div onClick={()=>setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 14px',cursor:'pointer',background:`${T.gold}10`}}>
-        <div>
-          <div style={{fontSize:12,letterSpacing:'0.2em',textTransform:'uppercase',color:T.gold,fontWeight:700}}>✨ Générateur de recette</div>
-          <div style={{fontSize:10,color:T.textDim,marginTop:2}}>Recette personnalisée selon café, torréfaction, profil et intensité</div>
+    <div style={{marginBottom:16,background:T.bg2,border:`1px solid ${coachOn?COACH_C:T.gold}55`,borderRadius:10,boxShadow:coachOn?`0 0 0 1px ${COACH_C}33, 0 4px 20px ${COACH_C}22`:`0 2px 8px ${T.shadow}`,overflow:'hidden',transition:'box-shadow 0.3s, border-color 0.3s'}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 14px',cursor:'pointer',background:coachOn?`${COACH_C}14`:`${T.gold}10`,transition:'background 0.3s'}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{fontSize:12,letterSpacing:'0.2em',textTransform:'uppercase',color:coachOn?COACH_C:T.gold,fontWeight:700}}>{coachOn?'🧠 Coach IA actif':'✨ Générateur de recette'}</div>
+          <div style={{fontSize:10,color:T.textDim,marginTop:2}}>{coachOn?'Génère puis ajuste itérativement selon ton goût en tasse':'Recette personnalisée selon café, torréfaction, profil et intensité'}</div>
         </div>
-        <div style={{fontSize:18,color:T.gold,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▾</div>
+        <div style={{fontSize:18,color:coachOn?COACH_C:T.gold,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',marginLeft:8}}>▾</div>
+      </div>
+
+      {/* Bouton toggle Coach IA — bien en évidence */}
+      <div style={{padding:'10px 14px',background:coachOn?`${COACH_C}0d`:T.bg3,borderBottom:`1px solid ${coachOn?COACH_C:T.border}33`}}>
+        <button onClick={(e)=>{e.stopPropagation();setCoachOn(c=>!c);if(!coachOn&&generated)setShowFeedback(true)}} style={{
+          width:'100%',padding:'12px 14px',
+          border:`2px solid ${coachOn?COACH_C:T.border}`,
+          background:coachOn?`linear-gradient(135deg, ${COACH_C}33 0%, ${COACH_C}18 100%)`:T.bg2,
+          color:coachOn?COACH_C:T.textDim,
+          borderRadius:8,cursor:'pointer',
+          fontSize:13,fontWeight:800,letterSpacing:'0.15em',textTransform:'uppercase',
+          touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          display:'flex',alignItems:'center',justifyContent:'center',gap:10,
+          boxShadow:coachOn?`0 0 12px ${COACH_C}66, inset 0 0 8px ${COACH_C}22`:'none',
+          transition:'all 0.25s',
+        }}>
+          <span style={{
+            display:'inline-block',width:10,height:10,borderRadius:'50%',
+            background:coachOn?COACH_C:T.textMute,
+            boxShadow:coachOn?`0 0 8px ${COACH_C}, 0 0 14px ${COACH_C}88`:'none',
+            transition:'all 0.25s',
+          }}/>
+          {coachOn?'🧠 COACH IA · ACTIVÉ':'🧠 ACTIVER LE COACH IA'}
+        </button>
+        <div style={{marginTop:8,fontSize:10,color:T.textMute,fontFamily:'monospace',lineHeight:1.5,textAlign:'center'}}>
+          {coachOn
+            ? 'Après chaque essai, dis ce que tu as goûté → l\'app ajuste mouture / temp / ratio selon les protocoles SCA.'
+            : 'Active pour passer en mode itératif (feedback goût → ajustement précis).'}
+        </div>
       </div>
 
       {open&&(
@@ -3450,19 +3680,91 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
           )}
 
           <button onClick={onGenerate} style={{
-            marginTop:14,width:'100%',padding:'13px 0',border:`1px solid ${T.gold}`,
-            background:`${T.gold}22`,color:T.gold,borderRadius:6,cursor:'pointer',
+            marginTop:14,width:'100%',padding:'13px 0',border:`1px solid ${coachOn?COACH_C:T.gold}`,
+            background:coachOn?`${COACH_C}22`:`${T.gold}22`,color:coachOn?COACH_C:T.gold,borderRadius:6,cursor:'pointer',
             fontSize:13,letterSpacing:'0.18em',fontWeight:700,
             touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
           }}>
-            ✨ GÉNÉRER LA RECETTE
+            {coachOn?'🧠 GÉNÉRER & LANCER LE COACH':'✨ GÉNÉRER LA RECETTE'}
           </button>
         </div>
       )}
 
       {generated&&(
         <div style={{padding:'4px 14px 14px'}}>
+          {/* Historique d'itérations Coach IA */}
+          {coachOn&&coachHistory.length>0&&(
+            <div style={{marginBottom:12,padding:'10px 12px',background:`${COACH_C}0d`,border:`1px solid ${COACH_C}44`,borderRadius:8}}>
+              <div style={{fontSize:9,letterSpacing:'0.2em',textTransform:'uppercase',color:COACH_C,fontWeight:700,marginBottom:6}}>🧠 Itérations Coach IA</div>
+              {coachHistory.map((h,i)=>(
+                <div key={i} style={{fontSize:11,color:T.textDim,marginBottom:4,fontFamily:'monospace',display:'flex',gap:8,alignItems:'flex-start'}}>
+                  <span style={{color:COACH_C,fontWeight:700,minWidth:24}}>#{i+1}</span>
+                  <span style={{flexShrink:0}}>{h.icon}</span>
+                  <span><span style={{color:h.color}}>{h.label}</span> → <span style={{color:T.gold}}>{h.delta}</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <RecipeCard recipe={generated} T={T} grinder={grinder}/>
+
+          {/* Bloc feedback Coach IA */}
+          {coachOn&&!showFeedback&&(
+            <button onClick={()=>setShowFeedback(true)} style={{
+              width:'100%',padding:'11px 0',marginTop:-4,marginBottom:8,
+              border:`1px solid ${COACH_C}`,background:`${COACH_C}11`,color:COACH_C,
+              borderRadius:6,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,
+              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+            }}>
+              🧠 J'AI GOÛTÉ — AJUSTER LA RECETTE
+            </button>
+          )}
+
+          {coachOn&&showFeedback&&(
+            <div style={{marginTop:8,marginBottom:12,padding:'14px',background:`${COACH_C}0d`,border:`1px solid ${COACH_C}66`,borderRadius:8}}>
+              <div style={{fontSize:11,letterSpacing:'0.15em',textTransform:'uppercase',color:COACH_C,fontWeight:700,marginBottom:4}}>🧠 Coach IA — Comment était la tasse ?</div>
+              <div style={{fontSize:10,color:T.textDim,marginBottom:12,fontFamily:'monospace'}}>Choisis le goût dominant. L'app proposera UN ajustement précis (principe SCA : une variable à la fois).</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                {TASTE_FEEDBACKS.map(t=>(
+                  <button key={t.id} onClick={()=>handleFeedback(t.id)} style={{
+                    padding:'10px 10px',
+                    border:`1px solid ${t.color}66`,
+                    background:`${t.color}11`,
+                    color:t.color,
+                    borderRadius:6,cursor:'pointer',
+                    fontSize:11,fontWeight:700,textAlign:'left',
+                    touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                    display:'flex',flexDirection:'column',gap:3,
+                  }}>
+                    <span style={{fontSize:13}}>{t.icon} {t.label}</span>
+                    <span style={{fontSize:9,color:T.textMute,fontFamily:'monospace',fontWeight:400,letterSpacing:0}}>{t.desc}</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={()=>setShowFeedback(false)} style={{
+                marginTop:10,width:'100%',padding:'8px 0',
+                border:`1px solid ${T.border}`,background:'transparent',color:T.textMute,
+                borderRadius:6,cursor:'pointer',fontSize:11,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              }}>Annuler</button>
+            </div>
+          )}
+
+          {/* Diagnostic Coach IA */}
+          {coachOn&&lastDiagnosis&&!showFeedback&&(
+            <div style={{marginBottom:12,padding:'12px 14px',background:`${lastDiagnosis.color}11`,border:`1px solid ${lastDiagnosis.color}88`,borderRadius:8}}>
+              <div style={{fontSize:11,letterSpacing:'0.15em',textTransform:'uppercase',color:lastDiagnosis.color,fontWeight:700,marginBottom:6,display:'flex',alignItems:'center',gap:6}}>
+                <span style={{fontSize:16}}>{lastDiagnosis.icon}</span>
+                <span>Diagnostic : {lastDiagnosis.label}</span>
+              </div>
+              {lastDiagnosis.delta&&(
+                <div style={{fontSize:12,color:T.gold,fontWeight:700,fontFamily:'monospace',marginBottom:6}}>→ Ajustement appliqué : {lastDiagnosis.delta}</div>
+              )}
+              <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>{lastDiagnosis.reason}</div>
+              {lastDiagnosis.advice&&<div style={{marginTop:4,fontSize:11,color:T.text,lineHeight:1.5,fontStyle:'italic'}}>{lastDiagnosis.advice}</div>}
+            </div>
+          )}
+
           {savingMode?(
             <div style={{marginTop:4,display:'flex',gap:6}}>
               <input
@@ -3818,7 +4120,7 @@ function TabBoutique({ T }) {
         href="https://torrea.fr/"
         icon="🛒"
         title="Boutique TORREA"
-        subtitle="Découvrez notre sélection de cafés de spécialité, torréfiés artisanalement"
+        subtitle="Découvrez notre sélection de cafés artisanaux, torréfiés en France"
         color={T.gold}
       />
       <Btn
@@ -3841,6 +4143,14 @@ function TabBoutique({ T }) {
 
 // ─── WELCOME MODAL ────────────────────────────────────────────────────────────
 function WelcomeModal({ onClose, T }) {
+  const COACH_C='#9b6bff'
+  const news = [
+    { icon:'🧠', title:'Coach IA', accent:COACH_C, desc:"Active le Coach dans le générateur : après chaque essai, dis ce que tu as goûté (acide, amer, fade…) → l'app ajuste mouture / temp / ratio selon les protocoles SCA." },
+    { icon:'★',  title:'Favoris moulins & machines', accent:T.gold, desc:'Marque tes moulins et machines préférés d\'une étoile pour les retrouver instantanément en haut de la liste.' },
+    { icon:'☕', title:'Fellow Aiden', accent:T.gold, desc:'Nouvelle méthode de brassage avec sélection automatique de profil expert (Washed Clarity, Natural Sweetness, Hybrid…) selon ton café.' },
+    { icon:'👾', title:'Coffee Invader élargi', accent:T.gold, desc:'L\'easter egg accessible avec n\'importe quelle machine. Mode swipe simplifié et plus réactif.' },
+    { icon:'💾', title:'Recettes sauvegardées persistantes', accent:T.gold, desc:'Tes recettes sauvegardées sont visibles quelle que soit la méthode active.' },
+  ]
   const features = [
     { icon: '⚙', title: 'Calibration Moulin', desc: "Analyse ton ratio et ton temps d'extraction, recommande des ajustements de mouture progressifs." },
     { icon: '☕', title: 'Calibration Machine', desc: 'Optimise ta température et ta pré-infusion selon tes résultats en tasse.' },
@@ -3850,7 +4160,7 @@ function WelcomeModal({ onClose, T }) {
   ]
   return (
     <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',background:'rgba(0,0,0,0.72)',backdropFilter:'blur(4px)'}}>
-      <div style={{background:T.bg2,border:`1px solid ${T.gold}66`,borderRadius:14,maxWidth:420,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:`0 8px 40px rgba(0,0,0,0.6)`}}>
+      <div style={{background:T.bg2,border:`1px solid ${T.gold}66`,borderRadius:14,maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:`0 8px 40px rgba(0,0,0,0.6)`}}>
         {/* Header */}
         <div style={{padding:'24px 20px 16px',borderBottom:`1px solid ${T.border}`,textAlign:'center'}}>
           <div style={{fontSize:26,fontWeight:900,color:T.gold,fontFamily:'Georgia,serif',letterSpacing:'-0.02em',lineHeight:1}}>TORREA</div>
@@ -3859,8 +4169,28 @@ function WelcomeModal({ onClose, T }) {
             Ton assistant de calibration café — tire le meilleur de chaque grain, à chaque extraction.
           </div>
         </div>
-        {/* Features */}
-        <div style={{padding:'16px 20px'}}>
+
+        {/* Nouveautés */}
+        <div style={{padding:'16px 20px 8px',background:`linear-gradient(180deg, ${COACH_C}0a 0%, transparent 100%)`}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+            <div style={{flex:1,height:1,background:`linear-gradient(90deg, transparent, ${COACH_C}66, transparent)`}}/>
+            <div style={{fontSize:10,letterSpacing:'0.3em',color:COACH_C,fontWeight:700,textTransform:'uppercase'}}>🆕 Nouveautés V10.2</div>
+            <div style={{flex:1,height:1,background:`linear-gradient(90deg, transparent, ${COACH_C}66, transparent)`}}/>
+          </div>
+          {news.map(f=>(
+            <div key={f.title} style={{display:'flex',gap:12,marginBottom:14,alignItems:'flex-start',padding:'10px 12px',background:`${f.accent}0a`,border:`1px solid ${f.accent}33`,borderRadius:8}}>
+              <div style={{fontSize:18,flexShrink:0,marginTop:1,width:24,textAlign:'center'}}>{f.icon}</div>
+              <div>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.1em',color:f.accent,textTransform:'uppercase',marginBottom:2}}>{f.title}</div>
+                <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>{f.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Fonctionnalités principales */}
+        <div style={{padding:'8px 20px 16px'}}>
+          <div style={{fontSize:10,letterSpacing:'0.25em',color:T.textMute,fontWeight:700,textTransform:'uppercase',marginBottom:10,marginTop:8}}>Fonctionnalités</div>
           {features.map(f=>(
             <div key={f.title} style={{display:'flex',gap:12,marginBottom:14,alignItems:'flex-start'}}>
               <div style={{fontSize:18,flexShrink:0,marginTop:1,width:24,textAlign:'center'}}>{f.icon}</div>
