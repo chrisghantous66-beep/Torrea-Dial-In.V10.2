@@ -585,6 +585,13 @@ Choisissez votre méthode (Espresso, Filtre, AeroPress, Chemex, Moka). Chaque m�
 ③ MOULIN
 Sélectionnez votre moulin. L'app affiche la plage de réglages recommandée pour votre méthode dans l'unité native du moulin (clics, numéros, µm…).
 
+★ FAVORIS MOULIN
+Tape l'étoile (☆ → ★) à côté d'un moulin pour l'ajouter à tes favoris. Tes favoris :
+• apparaissent en haut du dropdown (section ★ Favoris)
+• s'affichent en chips d'accès rapide quand le sélecteur est replié
+• sont marqués d'une étoile dans le dropdown
+Pratique quand tu jongles entre plusieurs moulins (espresso vs filtre).
+
 ④ DOSAGE
 • Dose : quantité de café (g) dans le panier
 • Rendement : quantité de café (g) dans la tasse
@@ -644,6 +651,11 @@ Saisis la date de torréfaction. Un badge coloré indique l'état du café :
 ⚙ SÉLECTEUR DE MACHINE
 Sélectionne ta machine espresso. 13 modèles disponibles classés en
 4 catégories de pré-infusion :
+
+★ FAVORIS MACHINE
+Tape l'étoile (☆ → ★) à côté d'une machine pour la mettre en favori.
+Les favoris apparaissent en haut du dropdown et en chips rapides
+quand le sélecteur est replié — un tap suffit pour basculer.
 • Sans pré-infusion (Gaggia Classic Pro, Rancilio Silvia, Dedica…)
   → seules la dose, le yield, le temps et la température comptent
 • Pré-infusion fixe (Bambino, Barista Express, Linea Micra)
@@ -699,9 +711,71 @@ Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suff
 Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…
 (Disponible uniquement avec une machine à pré-infusion programmable)`
 
+const GUIDE_RECETTES = `GUIDE D'UTILISATION — ONGLET RECETTES
+
+⚙ CONVERTIR LES RÉGLAGES POUR MON MOULIN
+Choisis ton moulin pour voir la mouture en clics/numéros natifs en plus
+des µm. Tape ☆ → ★ pour ajouter le moulin à tes favoris : il apparaît
+en chips d'accès rapide au-dessus du sélecteur.
+
+▽ MÉTHODES DISPONIBLES
+12 méthodes filtre & alternatives : V60, Switch, Chemex, French Press,
+AeroPress, Fellow Aiden, Drip, Kalita, Origami, Syphon, Cold Brew, Turkish.
+Chaque méthode propose des recettes championnat et un générateur.
+
+✨ GÉNÉRATEUR DE RECETTE
+Crée une recette personnalisée en 4 paramètres :
+① Café utilisé — nom, pays, process (lavé / naturel / honey)
+② Niveau de torréfaction — Light, Medium, Dark
+③ Profil en tasse — Balanced, Fruity, Citrus, Floral, Chocolate, Sweet (multi)
+④ Intensité — Mild, Balanced, Strong
+
+L'app calcule dose, ratio, eau, température, mouture (µm), temps total
+et génère les étapes de versement adaptées à la méthode.
+
+🧠 COACH IA — MODE ITÉRATIF (toggle bouton violet)
+Active le Coach IA pour passer du mode 'recette unique' au mode
+'ajustement après dégustation'. Workflow :
+① Génère ta recette de départ
+② Brasse, goûte
+③ Tape "J'AI GOÛTÉ — AJUSTER LA RECETTE"
+④ Choisis le défaut dominant : 🍋 Acide / ⚡ Amer / 💧 Fade /
+   🌿 Astringent / ➖ Sans relief / 🛢 Trop lourd / ⭐ Équilibré
+⑤ L'app applique UN seul ajustement (mouture OU temp OU ratio)
+   selon les protocoles SCA. L'historique des itérations s'affiche.
+⑥ Itère jusqu'à atteindre l'équilibre
+
+Principe SCA : ne change qu'UNE variable à la fois pour identifier
+précisément ce qui marche. L'app alterne automatiquement les variables
+d'une itération à l'autre pour ne pas marteler la même.
+
+💾 RECETTES SAUVEGARDÉES (⭐ Mes recettes)
+Sauvegarde n'importe quelle recette générée ou ajustée — elle apparaît
+dans le panneau "⭐ Mes recettes". Tes recettes sauvegardées sont
+visibles depuis n'importe quelle méthode active.
+
+✕ ANNULER LA RECETTE
+Le bouton ✕ à côté du bouton Sauvegarder efface la recette générée
+et remet à zéro l'historique du Coach IA. Pratique pour repartir
+sur de nouveaux paramètres.
+
+📤 PARTAGE
+Tap "Partager" sur une recette → QR code + lien court pour la coller
+ou la scanner sur un autre appareil.
+
+CONSEILS
+• Active le Coach IA dès le 2e essai sur un nouveau café
+• Note tes recettes réussies (⭐ Sauvegarder) pour les retrouver
+• Le Coach alterne mouture/temp/ratio : si l'app suggère temp +2°C
+  et que tu préfères changer la mouture, demande un autre feedback
+  ou ajuste manuellement
+• Pour Fellow Aiden, le générateur sélectionne automatiquement
+  un profil expert (Washed Clarity, Natural Sweetness, Hybrid…)
+  selon le process du café`
+
 function GuideModal({ mode, onClose, T }) {
-  const text = mode === 'moulin' ? GUIDE_MOULIN : GUIDE_MACHINE
-  const title = mode === 'moulin' ? '⚙ GUIDE — MOULIN' : '☕ GUIDE — MACHINE'
+  const text = mode === 'moulin' ? GUIDE_MOULIN : (mode === 'machine' ? GUIDE_MACHINE : GUIDE_RECETTES)
+  const title = mode === 'moulin' ? '⚙ GUIDE — MOULIN' : (mode === 'machine' ? '☕ GUIDE — MACHINE' : '▽ GUIDE — RECETTES')
   return (
     <div style={{position:'fixed',inset:0,background:'#000000ee',zIndex:2000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={onClose}>
       <div style={{background:T.bg2,border:`1px solid ${T.border2}`,borderRadius:'16px 16px 0 0',padding:20,width:'100%',maxWidth:520,maxHeight:'88vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
@@ -1692,6 +1766,28 @@ function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose,
 // ─── EASTER EGG : COFFEE INVADERS (∞ progressive) ────────────────────────────
 const INVADERS_HISCORE_KEY = 'torrea_invaders_hiscore'
 const INVADERS_CONTROL_KEY = 'torrea_invaders_control'
+const INVADERS_SOUND_KEY = 'torrea_invaders_sound'
+const INVADERS_DIFFICULTY_KEY = 'torrea_invaders_difficulty'
+
+// ── Audio mini-engine (lazy init) ──
+let _audioCtx = null
+const audioCtx = () => {
+  if(_audioCtx) return _audioCtx
+  try { _audioCtx = new (window.AudioContext||window.webkitAudioContext)() } catch { _audioCtx = null }
+  return _audioCtx
+}
+const playTone = (freq, dur=0.06, type='square', vol=0.08, slide=null) => {
+  const ctx = audioCtx(); if(!ctx) return
+  try {
+    const o = ctx.createOscillator(), g = ctx.createGain()
+    o.type = type; o.frequency.setValueAtTime(freq, ctx.currentTime)
+    if(slide!=null) o.frequency.exponentialRampToValueAtTime(Math.max(40,slide), ctx.currentTime+dur)
+    g.gain.setValueAtTime(vol, ctx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur)
+    o.connect(g); g.connect(ctx.destination)
+    o.start(); o.stop(ctx.currentTime+dur)
+  } catch {}
+}
 
 function CoffeeInvaders({ onClose, T }) {
   const canvasRef = useRef(null)
@@ -1707,17 +1803,38 @@ function CoffeeInvaders({ onClose, T }) {
     try { return localStorage.getItem(INVADERS_CONTROL_KEY) || 'buttons' } catch { return 'buttons' }
   })
   const [autoFire, setAutoFire] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const [soundOn, setSoundOn] = useState(() => {
+    try { return localStorage.getItem(INVADERS_SOUND_KEY) !== '0' } catch { return true }
+  })
+  const [difficulty, setDifficulty] = useState(() => {
+    try { return localStorage.getItem(INVADERS_DIFFICULTY_KEY) || 'normal' } catch { return 'normal' }
+  })
   const touchRef = useRef({ left:false, right:false, fire:false, autoFire:false, dragging:false, targetX:null })
   useEffect(() => { touchRef.current.autoFire = autoFire }, [autoFire])
   const themeRef = useRef(T)
   const hiscoreRef = useRef(hiscore)
   const controlModeRef = useRef(controlMode)
+  const pausedRef = useRef(paused)
+  const soundOnRef = useRef(soundOn)
+  const difficultyRef = useRef(difficulty)
   useEffect(() => { themeRef.current = T }, [T])
   useEffect(() => { hiscoreRef.current = hiscore }, [hiscore])
   useEffect(() => {
     controlModeRef.current = controlMode
     try { localStorage.setItem(INVADERS_CONTROL_KEY, controlMode) } catch {}
   }, [controlMode])
+  useEffect(() => { pausedRef.current = paused }, [paused])
+  useEffect(() => {
+    soundOnRef.current = soundOn
+    try { localStorage.setItem(INVADERS_SOUND_KEY, soundOn?'1':'0') } catch {}
+  }, [soundOn])
+  useEffect(() => {
+    difficultyRef.current = difficulty
+    try { localStorage.setItem(INVADERS_DIFFICULTY_KEY, difficulty) } catch {}
+  }, [difficulty])
+  // Helper son qui respecte le toggle
+  const sfx = (...args) => { if(soundOnRef.current) playTone(...args) }
 
   useEffect(() => {
     if(gameKey === 0) return
@@ -1726,7 +1843,7 @@ function CoffeeInvaders({ onClose, T }) {
     const ctx = canvas.getContext('2d')
     const W = canvas.width, H = canvas.height
 
-    const player = { x: W/2 - 18, y: H - 44, w: 36, h: 26, speed: 3.4, shield: 0 }
+    const player = { x: W/2 - 18, y: H - 44, w: 36, h: 26, speed: 3.4, shield: 0, invincible: 0 }
     let bullets = []
     let enemyBullets = []
     let enemies = []
@@ -1747,6 +1864,12 @@ function CoffeeInvaders({ onClose, T }) {
     let waveAnnounceText = ''
     let waveAnnounceTimer = 0
     const pu = { double:0, triple:0, rapid:0, x2:0 }
+    // Difficulté : easy = 4 vies + ennemis plus lents, normal = 3, hard = 2 + ennemis plus rapides
+    const diffMap = { easy:{lives:4, speed:0.85}, normal:{lives:3, speed:1.0}, hard:{lives:2, speed:1.2} }
+    const diff = diffMap[difficultyRef.current]||diffMap.normal
+    let lives = diff.lives
+    let shake = 0 // Frames restantes de tremblement écran
+    const triggerShake = (n) => { shake = Math.max(shake, n) }
 
     const rand = (a,b) => a + Math.random()*(b-a)
 
@@ -1773,7 +1896,9 @@ function CoffeeInvaders({ onClose, T }) {
           vx: 1.4 + wave*0.06, lastShot: 0, pattern: 0,
         })
         waveAnnounceText = `☕ BOSS — VAGUE ${wave}`
+        sfx(165, 0.30, 'sawtooth', 0.10, 80)
       } else {
+        sfx(550, 0.10, 'square', 0.06, 880)
         const cols = Math.min(8, 4 + Math.floor((wave-1)/2))
         const rows = Math.min(5, 2 + Math.floor((wave-1)/3))
         const eW = 26, eH = 20, gap = 6
@@ -1794,8 +1919,10 @@ function CoffeeInvaders({ onClose, T }) {
     }
 
     const spawnPowerup = (x, y) => {
-      const types = ['double','triple','rapid','x2','shield']
-      const t = types[Math.floor(Math.random()*types.length)]
+      const types = ['double','triple','rapid','x2','shield','bomb']
+      // Bombe plus rare
+      const r = Math.random()
+      const t = r < 0.10 ? 'bomb' : types[Math.floor(Math.random()*5)]
       powerups.push({ x: x-7, y, w:14, h:14, vy:1.5, type: t, age:0 })
     }
 
@@ -1811,11 +1938,36 @@ function CoffeeInvaders({ onClose, T }) {
 
     const applyPowerup = (t) => {
       const TT = themeRef.current
-      if(t === 'double') { pu.double = 540; floatText(player.x+player.w/2, player.y-10, 'DOUBLE', TT.blue) }
-      else if(t === 'triple') { pu.triple = 540; floatText(player.x+player.w/2, player.y-10, 'TRIPLE', TT.purple) }
-      else if(t === 'rapid') { pu.rapid = 540; floatText(player.x+player.w/2, player.y-10, 'RAPID', TT.gold) }
-      else if(t === 'x2') { pu.x2 = 540; floatText(player.x+player.w/2, player.y-10, 'SCORE ×2', TT.green) }
-      else if(t === 'shield') { player.shield = 1; floatText(player.x+player.w/2, player.y-10, 'SHIELD', TT.blue) }
+      if(t === 'double') { pu.double = 540; floatText(player.x+player.w/2, player.y-10, 'DOUBLE', TT.blue); sfx(880, 0.12, 'triangle', 0.06, 1320) }
+      else if(t === 'triple') { pu.triple = 540; floatText(player.x+player.w/2, player.y-10, 'TRIPLE', TT.purple); sfx(990, 0.14, 'triangle', 0.06, 1480) }
+      else if(t === 'rapid') { pu.rapid = 540; floatText(player.x+player.w/2, player.y-10, 'RAPID', TT.gold); sfx(660, 0.10, 'triangle', 0.06, 1100) }
+      else if(t === 'x2') { pu.x2 = 540; floatText(player.x+player.w/2, player.y-10, 'SCORE ×2', TT.green); sfx(550, 0.16, 'triangle', 0.06, 1100) }
+      else if(t === 'shield') { player.shield = 1; floatText(player.x+player.w/2, player.y-10, 'SHIELD', TT.blue); sfx(440, 0.14, 'triangle', 0.06, 880) }
+      else if(t === 'bomb') {
+        // Détruit tous les ennemis non-boss + clear bullets ennemis
+        floatText(W/2, H/2-20, '💥 BOMB', TT.red)
+        triggerShake(18)
+        sfx(110, 0.35, 'sawtooth', 0.12, 40)
+        for(const e of enemies){
+          if(!e.alive) continue
+          if(e.type === 'boss'){
+            e.hp = Math.max(0, e.hp - 4)
+            spawnParticles(e.x+e.w/2, e.y+e.h/2, TT.red, 14)
+            if(e.hp <= 0) { e.alive = false; gainScore(150+wave*15); spawnParticles(e.x+e.w/2, e.y+e.h/2, TT.gold, 30) }
+          } else {
+            e.alive = false
+            const isLight2 = TT === LIGHT
+            const altPalette = isLight2
+              ? { basic:'#3a8a60', fast:'#2a7aaa', zigzag:'#aa5530', tank:'#6a4aaa' }
+              : { basic:'#7acca0', fast:'#a8d4f0', zigzag:'#e0a878', tank:'#a888d4' }
+            spawnParticles(e.x+e.w/2, e.y+e.h/2, altPalette[e.type]||TT.red, 6)
+            const pts = e.type==='tank'?25:(e.type==='zigzag'?20:(e.type==='fast'?30:10))
+            gainScore(Math.round(pts*0.5)) // demi-points pour ne pas exploit
+          }
+        }
+        enemyBullets = []
+        bumpCombo()
+      }
     }
 
     const fireBullet = () => {
@@ -1831,6 +1983,7 @@ function CoffeeInvaders({ onClose, T }) {
       } else {
         bullets.push({ x:cx, y, w:6, h:8, vx:0, vy:-7 })
       }
+      sfx(880, 0.04, 'square', 0.04)
     }
 
     const comboMult = () => 1 + Math.min(combo, 20)*0.05
@@ -1840,8 +1993,25 @@ function CoffeeInvaders({ onClose, T }) {
     }
     const bumpCombo = () => { combo++; comboTimer = 150 }
 
-    const die = () => {
+    // takeDamage : retire 1 vie. Si vies > 0 → invincibilité 90 frames, sinon vraie mort.
+    const takeDamage = () => {
+      if(player.invincible > 0) return false
+      const TT = themeRef.current
+      lives--
+      triggerShake(10)
+      sfx(220, 0.18, 'triangle', 0.10, 110)
+      spawnParticles(player.x+player.w/2, player.y+player.h/2, TT.red, 18)
+      floatText(player.x+player.w/2, player.y-12, '-1 ❤', TT.red)
+      if(lives <= 0){ doDie(); return true }
+      // Sinon, invincibilité + clear enemy bullets pour donner de l'air
+      player.invincible = 90
+      enemyBullets = []
+      combo = 0; comboTimer = 0
+      return false
+    }
+    const doDie = () => {
       alive = false
+      sfx(330, 0.5, 'sawtooth', 0.12, 50)
       setFinalScore(score)
       setFinalWave(wave)
       setAutoFire(false)
@@ -1857,10 +2027,13 @@ function CoffeeInvaders({ onClose, T }) {
       setStatus('lost')
       draw()
     }
+    // Compat alias — utilisé par la boucle quand les ennemis atteignent le joueur
+    const die = doDie
 
     const keys = {}
     const onKeyDown = e => {
       if(e.key === 'Escape') { onClose(); return }
+      if(e.key === 'p' || e.key === 'P') { setPaused(p=>!p); return }
       if(['ArrowLeft','ArrowRight','a','d',' '].includes(e.key)) e.preventDefault()
       keys[e.key.toLowerCase()] = true
     }
@@ -1892,9 +2065,17 @@ function CoffeeInvaders({ onClose, T }) {
         zigzag: ['#e0a878','#8a4030'],
         tank:   ['#a888d4','#5a3088'],
       }
+      // Reset transform avant tout (au cas où shake précédent)
+      ctx.setTransform(1,0,0,1,0,0)
       // Background
       ctx.fillStyle = TT.inputBg
       ctx.fillRect(0,0,W,H)
+      // Apply screen shake offset après le bg
+      if(shake > 0) {
+        const sx = (Math.random()-0.5) * shake * 0.8
+        const sy = (Math.random()-0.5) * shake * 0.8
+        ctx.translate(sx, sy)
+      }
       // Bean dust
       ctx.fillStyle = isLight ? 'rgba(154,110,32,0.32)' : 'rgba(212,176,106,0.22)'
       for(let i=0;i<25;i++){
@@ -1933,10 +2114,13 @@ function CoffeeInvaders({ onClose, T }) {
           }
         }
       }
-      // Player (espresso cup)
-      drawCup(player.x, player.y, player.w, player.h, TT.gold, '#3a1a08')
-      ctx.fillStyle = isLight ? '#7a5618' : '#c8a060'
-      ctx.fillRect(player.x+5, player.y+8, player.w-10, 1)
+      // Player (espresso cup) — clignote pendant invincibilité
+      const blink = player.invincible > 0 && Math.floor(player.invincible/4)%2 === 0
+      if(!blink){
+        drawCup(player.x, player.y, player.w, player.h, TT.gold, '#3a1a08')
+        ctx.fillStyle = isLight ? '#7a5618' : '#c8a060'
+        ctx.fillRect(player.x+5, player.y+8, player.w-10, 1)
+      }
       // Shield
       if(player.shield > 0) {
         ctx.strokeStyle = TT.blue
@@ -1961,8 +2145,8 @@ function CoffeeInvaders({ onClose, T }) {
       ctx.fillStyle = TT.green
       for(const b of enemyBullets) ctx.fillRect(b.x, b.y, b.w, b.h)
       // Power-ups
-      const puColors = { double:TT.blue, triple:TT.purple, rapid:TT.gold, x2:TT.green, shield:TT.blue }
-      const puLabels = { double:'2', triple:'3', rapid:'R', x2:'×2', shield:'S' }
+      const puColors = { double:TT.blue, triple:TT.purple, rapid:TT.gold, x2:TT.green, shield:TT.blue, bomb:TT.red }
+      const puLabels = { double:'2', triple:'3', rapid:'R', x2:'×2', shield:'S', bomb:'💥' }
       for(const p of powerups) {
         const blink = Math.sin(p.age*0.15)*0.3+0.7
         ctx.globalAlpha = blink
@@ -1997,6 +2181,13 @@ function CoffeeInvaders({ onClose, T }) {
       ctx.fillText(`SCORE ${score}`, 8, 16)
       const wt = `VAGUE ${wave}`
       ctx.fillText(wt, W - ctx.measureText(wt).width - 8, 16)
+      // Lives (cœurs)
+      const heart = '♥'
+      ctx.font = 'bold 12px monospace'
+      for(let i=0;i<diff.lives;i++){
+        ctx.fillStyle = i<lives ? TT.red : (isLight ? '#cccccc' : '#3a3a44')
+        ctx.fillText(heart, 8 + i*14, 30)
+      }
       const hs = hiscoreRef.current
       if(hs.score > 0) {
         ctx.fillStyle = TT.textDim
@@ -2041,6 +2232,8 @@ function CoffeeInvaders({ onClose, T }) {
       if(pu.triple > 0) pu.triple--
       if(pu.rapid > 0) pu.rapid--
       if(pu.x2 > 0) pu.x2--
+      if(player.invincible > 0) player.invincible--
+      if(shake > 0) shake--
       if(comboTimer > 0) { comboTimer--; if(comboTimer === 0) combo = 0 }
       if(waveAnnounceTimer > 0) waveAnnounceTimer--
 
@@ -2095,8 +2288,8 @@ function CoffeeInvaders({ onClose, T }) {
               boss.lastShot = frame
             }
           } else {
-            // Formation movement
-            const baseSpeed = 0.35 + wave*0.07 + (1 - aliveEnemies.length / Math.max(1, enemies.length))*1.0
+            // Formation movement (modulé par difficulté)
+            const baseSpeed = (0.35 + wave*0.07 + (1 - aliveEnemies.length / Math.max(1, enemies.length))*1.0) * diff.speed
             let minX = Infinity, maxX = -Infinity, maxY = -Infinity
             for(const e of aliveEnemies){
               if(e.x < minX) minX = e.x
@@ -2157,12 +2350,17 @@ function CoffeeInvaders({ onClose, T }) {
                 : { basic:'#7acca0', fast:'#a8d4f0', zigzag:'#e0a878', tank:'#a888d4' }
               const col = altPalette[e.type] || TTk.red
               spawnParticles(e.x+e.w/2, e.y+e.h/2, col, e.type==='boss' ? 30 : 8)
+              if(e.type==='boss'){ triggerShake(14); sfx(110, 0.45, 'sawtooth', 0.13, 40) }
+              else if(e.type==='tank'){ sfx(330, 0.10, 'sawtooth', 0.06, 110) }
+              else { sfx(660, 0.05, 'square', 0.05) }
               const dropChance = e.type==='boss' ? 1 : (e.type==='tank' ? 0.25 : 0.07)
               if(Math.random() < dropChance) spawnPowerup(e.x+e.w/2, e.y+e.h/2)
               if(e.type==='boss') {
                 spawnPowerup(e.x+20, e.y+e.h/2)
                 spawnPowerup(e.x+e.w-20, e.y+e.h/2)
               }
+            } else {
+              sfx(440, 0.03, 'square', 0.03)
             }
             break
           }
@@ -2174,14 +2372,18 @@ function CoffeeInvaders({ onClose, T }) {
       for(const b of enemyBullets) {
         if(b.y < -50) continue
         if(b.x < player.x+player.w && b.x+b.w > player.x && b.y < player.y+player.h && b.y+b.h > player.y) {
+          if(player.invincible > 0) { continue }
           if(player.shield > 0) {
             player.shield = 0
             b.y = H+100
             const TTs = themeRef.current
             spawnParticles(player.x+player.w/2, player.y+player.h/2, TTs.blue, 14)
             floatText(player.x+player.w/2, player.y-10, 'SHIELD!', TTs.blue)
+            sfx(660, 0.10, 'triangle', 0.08, 440)
           } else {
-            die(); return
+            const dead = takeDamage()
+            b.y = H+100
+            if(dead) return
           }
         }
       }
@@ -2207,12 +2409,31 @@ function CoffeeInvaders({ onClose, T }) {
 
     const loop = () => {
       if(!alive) return
-      update()
-      if(!alive) return
-      draw()
+      if(!pausedRef.current){
+        update()
+        if(!alive) return
+        draw()
+      } else {
+        // En pause : on dessine le frame courant + overlay
+        draw()
+        const TT = themeRef.current
+        ctx.setTransform(1,0,0,1,0,0)
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.fillRect(0,0,W,H)
+        ctx.fillStyle = TT.gold
+        ctx.font = 'bold 24px monospace'
+        const txt = '⏸ PAUSE'
+        const tw = ctx.measureText(txt).width
+        ctx.fillText(txt, (W-tw)/2, H/2)
+        ctx.font = 'bold 10px monospace'
+        const sub = 'P / TAP — REPRENDRE'
+        const tw2 = ctx.measureText(sub).width
+        ctx.fillText(sub, (W-tw2)/2, H/2+22)
+      }
       requestAnimationFrame(loop)
     }
     startNextWave()
+    sfx(660, 0.10, 'square', 0.05, 880)
     requestAnimationFrame(loop)
 
     return () => {
@@ -2225,11 +2446,13 @@ function CoffeeInvaders({ onClose, T }) {
   const startGame = () => {
     setIsNewRecord(false)
     setAutoFire(false)
+    setPaused(false)
     setStatus('playing')
     setGameKey(k => k + 1)
   }
-  const goToMenu = () => { setAutoFire(false); setStatus('menu') }
+  const goToMenu = () => { setAutoFire(false); setPaused(false); setStatus('menu') }
   const toggleAutoFire = () => setAutoFire(v => !v)
+  const togglePause = () => setPaused(p => !p)
   const tDown = which => () => { touchRef.current[which] = true }
   const tUp = which => () => { touchRef.current[which] = false }
 
@@ -2240,7 +2463,9 @@ function CoffeeInvaders({ onClose, T }) {
     return (clientX - rect.left) * (c.width / rect.width)
   }
   const onCanvasPointerDown = (e) => {
-    if(controlMode !== 'swipe' || status !== 'playing') return
+    if(status !== 'playing') return
+    if(paused){ e.preventDefault(); setPaused(false); return }
+    if(controlMode !== 'swipe') return
     e.preventDefault()
     try { e.target.setPointerCapture(e.pointerId) } catch {}
     touchRef.current.dragging = true
@@ -2277,8 +2502,12 @@ function CoffeeInvaders({ onClose, T }) {
 
   return (
     <div style={{position:'fixed',inset:0,background:overlayBg,zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:14,gap:10}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',maxWidth:380}}>
-        <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,letterSpacing:'0.2em',color:T.gold}}>☕ COFFEE INVADERS</div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',maxWidth:380,gap:6}}>
+        <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,letterSpacing:'0.2em',color:T.gold,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>☕ COFFEE INVADERS</div>
+        {status==='playing'&&(
+          <button onClick={togglePause} title="Pause (P)" style={{background:paused?`${T.gold}22`:'transparent',border:`1px solid ${paused?T.gold:T.border}`,color:paused?T.gold:T.textDim,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:14,lineHeight:1,touchAction:'manipulation'}}>{paused?'▶':'⏸'}</button>
+        )}
+        <button onClick={()=>setSoundOn(s=>!s)} title={soundOn?'Son ON':'Son OFF'} style={{background:'transparent',border:`1px solid ${T.border}`,color:soundOn?T.gold:T.textMute,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:13,lineHeight:1,touchAction:'manipulation'}}>{soundOn?'🔊':'🔇'}</button>
         <button onClick={onClose} style={{background:'transparent',border:`1px solid ${T.border}`,color:T.textDim,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:18,lineHeight:1,touchAction:'manipulation'}}>×</button>
       </div>
       <div style={{position:'relative'}}>
@@ -2314,6 +2543,36 @@ function CoffeeInvaders({ onClose, T }) {
                 <div style={{fontSize:18}}>✋</div>
                 <div>SWIPE</div>
               </button>
+            </div>
+            <div style={{fontFamily:'monospace',fontSize:9,color:T.textDim,letterSpacing:'0.2em',marginTop:2}}>DIFFICULTÉ</div>
+            <div style={{display:'flex',gap:6,width:'100%',maxWidth:280}}>
+              {[
+                {id:'easy',label:'Facile',sub:'4 ❤'},
+                {id:'normal',label:'Normal',sub:'3 ❤'},
+                {id:'hard',label:'Difficile',sub:'2 ❤'},
+              ].map(d=>(
+                <button key={d.id} onClick={()=>setDifficulty(d.id)} style={{
+                  flex:1,padding:'8px 4px',
+                  background: difficulty===d.id ? `${T.gold}22` : T.bg3,
+                  border: `1.5px solid ${difficulty===d.id ? T.gold : T.border}`,
+                  color: difficulty===d.id ? T.gold : T.textDim,
+                  borderRadius:6,cursor:'pointer',fontFamily:'monospace',fontSize:10,letterSpacing:'0.05em',fontWeight:700,
+                  touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                  display:'flex',flexDirection:'column',alignItems:'center',gap:2,
+                }}>
+                  <div>{d.label}</div>
+                  <div style={{fontSize:9,opacity:0.8}}>{d.sub}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8,alignItems:'center',marginTop:2}}>
+              <button onClick={()=>setSoundOn(s=>!s)} style={{
+                padding:'7px 14px',background:soundOn?`${T.green}18`:T.bg3,
+                border:`1.5px solid ${soundOn?T.green:T.border}`,
+                color:soundOn?T.green:T.textDim,
+                borderRadius:6,cursor:'pointer',fontFamily:'monospace',fontSize:10,letterSpacing:'0.1em',fontWeight:700,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              }}>{soundOn?'🔊 SON ON':'🔇 SON OFF'}</button>
             </div>
             <button onClick={startGame} style={playBtn}>▶ JOUER</button>
           </div>
@@ -3791,17 +4050,26 @@ function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
               }}>✕</button>
             </div>
           ):(
-            <button onClick={handleSave} disabled={justSaved} style={{
-              width:'100%',padding:'11px 0',marginTop:-4,
-              border:`1px solid ${justSaved?T.green:T.gold}`,
-              background:justSaved?`${T.green}22`:`${T.gold}11`,
-              color:justSaved?T.green:T.gold,
-              borderRadius:6,cursor:justSaved?'default':'pointer',
-              fontSize:12,letterSpacing:'0.15em',fontWeight:700,
-              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
-            }}>
-              {justSaved?'✓ RECETTE SAUVEGARDÉE':'💾 SAUVEGARDER CETTE RECETTE'}
-            </button>
+            <div style={{display:'flex',gap:6,marginTop:-4}}>
+              <button onClick={handleSave} disabled={justSaved} style={{
+                flex:1,padding:'11px 0',
+                border:`1px solid ${justSaved?T.green:T.gold}`,
+                background:justSaved?`${T.green}22`:`${T.gold}11`,
+                color:justSaved?T.green:T.gold,
+                borderRadius:6,cursor:justSaved?'default':'pointer',
+                fontSize:12,letterSpacing:'0.15em',fontWeight:700,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              }}>
+                {justSaved?'✓ RECETTE SAUVEGARDÉE':'💾 SAUVEGARDER CETTE RECETTE'}
+              </button>
+              <button onClick={()=>{setGenerated(null);setJustSaved(false);setSavingMode(false);setCoachHistory([]);setLastDiagnosis(null);setShowFeedback(false)}} title="Annuler / Recommencer" style={{
+                padding:'0 16px',
+                border:`1px solid ${T.border}`,background:T.bg3,color:T.textMute,
+                borderRadius:6,cursor:'pointer',fontSize:14,fontWeight:700,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                flexShrink:0,
+              }}>✕</button>
+            </div>
           )}
         </div>
       )}
@@ -3847,12 +4115,15 @@ function SavedRecipesPanel({savedRecipes,onDelete,T,grinder}){
 function TabRecettes({T,coffee,setCoffee}){
   const [active,setActive]=useState('v60')
   const [grinderId,setGrinderId]=useState('none')
+  const [showGuide,setShowGuide]=useState(false)
+  const {favs:favGrinders,toggle:toggleFavGrinder,isFav:isFavGrinder}=useFavorites(FAV_GRINDERS_KEY)
   const [savedRecipes,setSavedRecipes]=useState(()=>{try{const s=localStorage.getItem(SAVED_RECIPES_KEY);return s?JSON.parse(s):[]}catch{return[]}})
   useEffect(()=>{try{localStorage.setItem(SAVED_RECIPES_KEY,JSON.stringify(savedRecipes))}catch{}},[savedRecipes])
 
   const recipes=RECIPES.filter(r=>r.method===active)
   const activeM=METHODS.find(m=>m.id===active)
   const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
+  const favGrinderEntries=favGrinders.map(id=>[id,GRINDERS[id]]).filter(([,v])=>v)
 
   const handleSaveRecipe=(recipe)=>{
     const saved={
@@ -3878,21 +4149,57 @@ function TabRecettes({T,coffee,setCoffee}){
 
   return(
     <div>
+      {showGuide&&<GuideModal mode="recettes" onClose={()=>setShowGuide(false)} T={T}/>}
+      {/* Bouton guide */}
+      <div style={{marginBottom:12}}>
+        <button onClick={()=>setShowGuide(true)} style={{width:'100%',padding:'9px 0',background:T.bg3,border:`1px solid ${T.gold}66`,color:T.gold,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',touchAction:'manipulation'}}>📖 GUIDE — RECETTES</button>
+      </div>
       {/* Sélecteur de moulin */}
       <div style={{marginBottom:16,padding:'12px 14px',background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,boxShadow:`0 2px 8px ${T.shadow}`}}>
         <div style={{fontSize:10,letterSpacing:'0.2em',textTransform:'uppercase',color:T.textMute,marginBottom:8}}>⚙ Convertir les réglages pour mon moulin</div>
-        <div style={{position:'relative'}}>
-          <select value={grinderId} onChange={e=>setGrinderId(e.target.value)} style={{width:'100%',padding:'9px 12px',background:T.bg3,color:grinderId!=='none'?T.gold:T.textMute,border:`1px solid ${grinderId!=='none'?T.gold:T.border}`,borderRadius:6,fontSize:13,fontFamily:'monospace',cursor:'pointer',outline:'none',WebkitAppearance:'none',appearance:'none',fontWeight:grinderId!=='none'?700:400}}>
-            <option value="none">— Aucun (afficher réglage original) —</option>
-            {Object.entries(brands).map(([brand,grinders])=>(
-              <optgroup key={brand} label={brand}>
-                {grinders.map(([id,g])=>(
-                  <option key={id} value={id}>{g.label}</option>
-                ))}
-              </optgroup>
+
+        {/* Chips favoris — accès rapide */}
+        {favGrinderEntries.length>0&&(
+          <div style={{marginBottom:8,display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+            <span style={{fontSize:9,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700,marginRight:2}}>★ Favoris</span>
+            {favGrinderEntries.map(([id,v])=>(
+              <button key={id} onClick={()=>setGrinderId(id)} style={{
+                padding:'5px 10px',fontSize:10,fontFamily:'monospace',
+                border:`1px solid ${grinderId===id?T.gold:`${T.gold}55`}`,
+                background:grinderId===id?`${T.gold}22`:`${T.gold}0a`,
+                color:grinderId===id?T.gold:T.textDim,
+                borderRadius:14,cursor:'pointer',touchAction:'manipulation',
+                fontWeight:grinderId===id?700:400,WebkitTapHighlightColor:'transparent',
+              }}>★ {v.label}</button>
             ))}
-          </select>
-          <span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',color:T.textMute,pointerEvents:'none'}}>▾</span>
+          </div>
+        )}
+
+        <div style={{display:'flex',gap:6,alignItems:'stretch'}}>
+          <div style={{position:'relative',flex:1,minWidth:0}}>
+            <select value={grinderId} onChange={e=>setGrinderId(e.target.value)} style={{width:'100%',padding:'9px 12px',background:T.bg3,color:grinderId!=='none'?T.gold:T.textMute,border:`1px solid ${grinderId!=='none'?T.gold:T.border}`,borderRadius:6,fontSize:13,fontFamily:'monospace',cursor:'pointer',outline:'none',WebkitAppearance:'none',appearance:'none',fontWeight:grinderId!=='none'?700:400}}>
+              <option value="none">— Aucun (afficher réglage original) —</option>
+              {Object.entries(brands).map(([brand,grinders])=>(
+                <optgroup key={brand} label={brand}>
+                  {grinders.map(([id,g])=>(
+                    <option key={id} value={id}>{isFavGrinder(id)?'★ ':''}{g.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',color:T.textMute,pointerEvents:'none'}}>▾</span>
+          </div>
+          {grinderId!=='none'&&(
+            <button onClick={()=>toggleFavGrinder(grinderId)} title={isFavGrinder(grinderId)?'Retirer des favoris':'Ajouter aux favoris'} style={{
+              padding:'0 14px',
+              background:isFavGrinder(grinderId)?`${T.gold}22`:T.bg3,
+              border:`1px solid ${isFavGrinder(grinderId)?T.gold:T.border}`,
+              color:isFavGrinder(grinderId)?T.gold:T.textMute,
+              borderRadius:6,cursor:'pointer',fontSize:16,
+              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              flexShrink:0,
+            }}>{isFavGrinder(grinderId)?'★':'☆'}</button>
+          )}
         </div>
         {grinder&&<div style={{marginTop:6,fontSize:10,color:T.textMute,fontFamily:'monospace'}}>{grinder.description}</div>}
       </div>
@@ -4120,7 +4427,7 @@ function TabBoutique({ T }) {
         href="https://torrea.fr/"
         icon="🛒"
         title="Boutique TORREA"
-        subtitle="Découvrez notre sélection de cafés artisanaux, torréfiés en France"
+        subtitle="Découvrez notre sélection de cafés de spécialité, torréfiés artisanalement"
         color={T.gold}
       />
       <Btn
