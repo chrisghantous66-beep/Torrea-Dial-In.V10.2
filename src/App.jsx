@@ -1772,6 +1772,18 @@ const INVADERS_HISCORE_KEY = 'torrea_invaders_hiscore'
 const INVADERS_CONTROL_KEY = 'torrea_invaders_control'
 const INVADERS_SOUND_KEY = 'torrea_invaders_sound'
 const INVADERS_DIFFICULTY_KEY = 'torrea_invaders_difficulty'
+const INVADERS_ACHIEVEMENTS_KEY = 'torrea_invaders_achievements'
+const INVADERS_GOLDEN_KEY = 'torrea_invaders_golden'
+
+const ACHIEVEMENTS = [
+  { id:'first_blood', label:'First Blood', desc:'Terminer la vague 1', icon:'☕', color:'#7acca0' },
+  { id:'combo_king', label:'Combo King', desc:'Atteindre combo ×10', icon:'🔥', color:'#e0a030' },
+  { id:'bomb_squad', label:'Bomb Squad', desc:'Tuer un boss avec une bombe', icon:'💣', color:'#d47a7a' },
+  { id:'untouchable', label:'Untouchable', desc:'Finir une vague sans dégât', icon:'🛡', color:'#7ab0e0' },
+  { id:'wave_10', label:'Wave 10', desc:'Atteindre la vague 10', icon:'👑', color:'#d4b040' },
+  { id:'speed_drinker', label:'Speed Drinker', desc:'Tuer 3 ennemis en 1 seconde', icon:'⚡', color:'#c0a0e0' },
+  { id:'golden_boy', label:'Golden Boy', desc:'Activer le skin doré secret', icon:'✨', color:'#d4b040' },
+]
 
 // ── Audio mini-engine (lazy init) ──
 let _audioCtx = null
@@ -1814,6 +1826,13 @@ function CoffeeInvaders({ onClose, T }) {
   const [difficulty, setDifficulty] = useState(() => {
     try { return localStorage.getItem(INVADERS_DIFFICULTY_KEY) || 'normal' } catch { return 'normal' }
   })
+  const [achievements, setAchievements] = useState(() => {
+    try { const s = localStorage.getItem(INVADERS_ACHIEVEMENTS_KEY); return s ? JSON.parse(s) : [] } catch { return [] }
+  })
+  const [achPopup, setAchPopup] = useState(null)
+  const [goldenSkin, setGoldenSkin] = useState(() => {
+    try { return localStorage.getItem(INVADERS_GOLDEN_KEY) === '1' } catch { return false }
+  })
   const touchRef = useRef({ left:false, right:false, fire:false, autoFire:false, dragging:false, targetX:null })
   useEffect(() => { touchRef.current.autoFire = autoFire }, [autoFire])
   const themeRef = useRef(T)
@@ -1822,6 +1841,12 @@ function CoffeeInvaders({ onClose, T }) {
   const pausedRef = useRef(paused)
   const soundOnRef = useRef(soundOn)
   const difficultyRef = useRef(difficulty)
+  const achRef = useRef(achievements)
+  const goldenSkinRef = useRef(goldenSkin)
+  const scoreTapRef = useRef({ count:0, lastTime:0 })
+  const bgBeatRef = useRef(null)
+  const achPopupTimerRef = useRef(null)
+  const dangerRef = useRef(false)
   useEffect(() => { themeRef.current = T }, [T])
   useEffect(() => { hiscoreRef.current = hiscore }, [hiscore])
   useEffect(() => {
@@ -1837,6 +1862,8 @@ function CoffeeInvaders({ onClose, T }) {
     difficultyRef.current = difficulty
     try { localStorage.setItem(INVADERS_DIFFICULTY_KEY, difficulty) } catch {}
   }, [difficulty])
+  useEffect(() => { achRef.current = achievements }, [achievements])
+  useEffect(() => { goldenSkinRef.current = goldenSkin }, [goldenSkin])
   // Helper son qui respecte le toggle
   const sfx = (...args) => { if(soundOnRef.current) playTone(...args) }
 
@@ -1872,16 +1899,22 @@ function CoffeeInvaders({ onClose, T }) {
     const diffMap = { easy:{lives:4, speed:0.85}, normal:{lives:3, speed:1.0}, hard:{lives:2, speed:1.2} }
     const diff = diffMap[difficultyRef.current]||diffMap.normal
     let lives = diff.lives
-    let shake = 0 // Frames restantes de tremblement écran
+    let shake = 0
+    let flashScreen = 0
+    let lastKillTimes = []
+    let prevHits = 0
     const triggerShake = (n) => { shake = Math.max(shake, n) }
 
     const rand = (a,b) => a + Math.random()*(b-a)
 
     const pickType = (w, row) => {
       const r = Math.random()
-      if(w >= 10 && row === 0 && r < 0.35) return 'tank'
-      if(w >= 7 && r < 0.30) return 'zigzag'
-      if(w >= 4 && r < 0.25) return 'fast'
+      if(w >= 12 && row === 0 && r < 0.30) return 'shielder'
+      if(w >= 10 && row === 0 && r < 0.30) return 'tank'
+      if(w >= 8 && r < 0.20) return 'teleporter'
+      if(w >= 7 && r < 0.25) return 'zigzag'
+      if(w >= 5 && r < 0.20) return 'splitter'
+      if(w >= 4 && r < 0.22) return 'fast'
       return 'basic'
     }
 
@@ -1891,6 +1924,7 @@ function CoffeeInvaders({ onClose, T }) {
       enemyBullets = []
       bullets = []
       dirX = 1
+      prevHits = 0
       const isBoss = wave % 5 === 0
       if(isBoss) {
         const hp = 12 + wave*3
@@ -1913,8 +1947,11 @@ function CoffeeInvaders({ onClose, T }) {
           enemies.push({
             x: startX+c*(eW+gap), y: 38+r*(eH+gap),
             w:eW, h:eH, alive:true, row:r, col:c,
-            type, hp: type==='tank'?2:1,
+            type, hp: type==='tank'||type==='splitter'?2:1,
+            shield: type==='shielder',
+            mini: false,
             wobble: c*0.3, zigPhase: rand(0, Math.PI*2),
+            teleTimer: rand(0, 120),
           })
         }
         waveAnnounceText = `VAGUE ${wave}`
@@ -1957,7 +1994,7 @@ function CoffeeInvaders({ onClose, T }) {
           if(e.type === 'boss'){
             e.hp = Math.max(0, e.hp - 4)
             spawnParticles(e.x+e.w/2, e.y+e.h/2, TT.red, 14)
-            if(e.hp <= 0) { e.alive = false; gainScore(150+wave*15); spawnParticles(e.x+e.w/2, e.y+e.h/2, TT.gold, 30) }
+            if(e.hp <= 0) { e.alive = false; gainScore(150+wave*15); spawnParticles(e.x+e.w/2, e.y+e.h/2, TT.gold, 30); awardAch('bomb_squad') }
           } else {
             e.alive = false
             const isLight2 = TT === LIGHT
@@ -1998,8 +2035,9 @@ function CoffeeInvaders({ onClose, T }) {
     const bumpCombo = () => { combo++; comboTimer = 150 }
 
     // takeDamage : retire 1 vie. Si vies > 0 → invincibilité 90 frames, sinon vraie mort.
-    const takeDamage = () => {
+    let takeDamage = () => {
       if(player.invincible > 0) return false
+      prevHits++
       const TT = themeRef.current
       lives--
       triggerShake(10)
@@ -2034,6 +2072,39 @@ function CoffeeInvaders({ onClose, T }) {
     // Compat alias — utilisé par la boucle quand les ennemis atteignent le joueur
     const die = doDie
 
+    const awardAch = (achId) => {
+      if(achRef.current.includes(achId)) return
+      const a = ACHIEVEMENTS.find(x=>x.id===achId)
+      if(!a) return
+      const next = [...achRef.current, achId]
+      achRef.current = next
+      setAchievements(next)
+      try { localStorage.setItem(INVADERS_ACHIEVEMENTS_KEY, JSON.stringify(next)) } catch {}
+      setAchPopup({ id:achId })
+      achPopupTimerRef.current = 120
+      spawnParticles(W/2, H/2-30, a.color, 20)
+      floatText(W/2, H/2, a.icon+' '+a.label, a.color)
+      sfx(880, 0.08, 'triangle', 0.08, 1320)
+      try { navigator.vibrate?.([20,40,20,40,60]) } catch {}
+    }
+
+    const checkAchievements = () => {
+      if(wave >= 2) awardAch('first_blood')
+      if(combo >= 10) awardAch('combo_king')
+      if(wave >= 10) awardAch('wave_10')
+      if(lastKillTimes.length >= 3 && lastKillTimes[lastKillTimes.length-1] - lastKillTimes[0] < 60) {
+        awardAch('speed_drinker')
+      }
+      if(waveTransitionTimer === 1 && lives === diff.lives && prevHits === 0) {
+        awardAch('untouchable')
+      }
+      if(goldenSkinRef.current) awardAch('golden_boy')
+    }
+
+    // Track hits for untouchable
+    const origTakeDamage = takeDamage
+    takeDamage = () => { prevHits++; return origTakeDamage() }
+
     const keys = {}
     const onKeyDown = e => {
       if(e.key === 'Escape') { onClose(); return }
@@ -2063,16 +2134,24 @@ function CoffeeInvaders({ onClose, T }) {
         fast:   ['#2a7aaa','#0a3060'],
         zigzag: ['#aa5530','#5a2010'],
         tank:   ['#6a4aaa','#2a0a60'],
+        splitter: ['#d08030','#6a3010'],
+        shielder: ['#4a80aa','#1a3050'],
+        teleporter: ['#8a4aaa','#3a1060'],
       } : {
         basic:  ['#7acca0','#3a8a60'],
         fast:   ['#a8d4f0','#3a6090'],
         zigzag: ['#e0a878','#8a4030'],
         tank:   ['#a888d4','#5a3088'],
+        splitter: ['#f0a040','#b05010'],
+        shielder: ['#7ab0e0','#2a6090'],
+        teleporter: ['#b888e0','#5a2090'],
       }
       // Reset transform avant tout (au cas où shake précédent)
       ctx.setTransform(1,0,0,1,0,0)
-      // Background
-      ctx.fillStyle = TT.inputBg
+      // Background with danger tint
+      const danger = dangerRef.current
+      const bgR = danger ? 40 : 0
+      ctx.fillStyle = danger ? `rgb(${20+bgR},${12},${12})` : TT.inputBg
       ctx.fillRect(0,0,W,H)
       // Apply screen shake offset après le bg
       if(shake > 0) {
@@ -2080,12 +2159,38 @@ function CoffeeInvaders({ onClose, T }) {
         const sy = (Math.random()-0.5) * shake * 0.8
         ctx.translate(sx, sy)
       }
-      // Bean dust
-      ctx.fillStyle = isLight ? 'rgba(154,110,32,0.32)' : 'rgba(212,176,106,0.22)'
-      for(let i=0;i<25;i++){
+      // Parallax bean dust — 3 layers at different speeds
+      const dustAlpha = danger ? 0.4 : (isLight ? 0.32 : 0.22)
+      const dustColor = danger ? `rgba(220,${80+danger*2},${40+danger*2},${dustAlpha})` : (isLight ? 'rgba(154,110,32,0.32)' : 'rgba(212,176,106,0.22)')
+      ctx.fillStyle = dustColor
+      // Layer 1 (slow, distant)
+      for(let i=0;i<18;i++){
+        const x = (i*89 + frame*0.15) % W
+        const y = (i*157 + frame*0.2) % H
+        ctx.globalAlpha = 0.4
+        ctx.fillRect(x, y, 1, 1)
+      }
+      // Layer 2 (medium)
+      for(let i=0;i<20;i++){
         const x = (i*73 + frame*0.4) % W
         const y = (i*131 + frame*0.6) % H
-        ctx.fillRect(x, y, 1, 1)
+        ctx.globalAlpha = 0.7
+        ctx.fillRect(x, y, 1.5, 1.5)
+      }
+      // Layer 3 (fast, close — larger particles)
+      for(let i=0;i<10;i++){
+        const x = (i*47 + frame*0.9) % W
+        const y = (i*211 + frame*1.1) % H
+        ctx.globalAlpha = 1
+        ctx.fillRect(x, y, 2.5, 2.5)
+      }
+      ctx.globalAlpha = 1
+      // Danger border pulse
+      if(danger) {
+        const pulse = Math.sin(frame*0.15)*0.5+0.5
+        ctx.strokeStyle = `rgba(220,60,40,${0.3 + pulse*0.5})`
+        ctx.lineWidth = 3
+        ctx.strokeRect(2, 2, W-4, H-4)
       }
       // Enemies
       for(const e of enemies) {
@@ -2106,26 +2211,104 @@ function CoffeeInvaders({ onClose, T }) {
         } else {
           const [body, liquid] = enemyColors[e.type] || enemyColors.basic
           const wob = Math.sin((frame+e.x)*0.05+e.wobble) * 1.5
-          drawCup(e.x+wob, e.y, e.w, e.h, body, liquid)
+          const ex = e.x+wob
+          // Teleporter: ghostly trail + dotted outline
+          if(e.type === 'teleporter') {
+            ctx.globalAlpha = 0.3
+            drawCup(ex-3, e.y-2, e.w+6, e.h+4, body, liquid)
+            ctx.globalAlpha = 0.6
+            drawCup(ex-1, e.y-1, e.w+2, e.h+2, body, liquid)
+            ctx.globalAlpha = 1
+            drawCup(ex, e.y, e.w, e.h, body, liquid)
+            ctx.setLineDash([2, 2])
+            ctx.strokeStyle = body
+            ctx.lineWidth = 1
+            ctx.strokeRect(ex-2, e.y-2, e.w+4, e.h+4)
+            ctx.setLineDash([])
+          } else {
+            drawCup(ex, e.y, e.w, e.h, body, liquid)
+          }
           if(frame % 24 < 12) {
             ctx.fillStyle = isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)'
-            ctx.fillRect(e.x+wob+10, e.y-3, 2, 3)
+            ctx.fillRect(ex+10, e.y-3, 2, 3)
           }
           if(e.type === 'tank') {
             ctx.strokeStyle = TT.gold
             ctx.lineWidth = 1
-            ctx.strokeRect(e.x+wob+1, e.y+3, e.w-2, e.h-6)
+            ctx.strokeRect(ex+1, e.y+3, e.w-2, e.h-6)
+          }
+          // Shielder shield arc
+          if(e.shield) {
+            const shAlpha = Math.sin(frame*0.2)*0.3+0.7
+            ctx.strokeStyle = `rgba(100,180,240,${shAlpha})`
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.arc(ex+e.w/2, e.y+e.h/2, e.w/2+4, Math.PI, 0)
+            ctx.stroke()
+          }
+          // Splitter fissure line
+          if(e.type === 'splitter') {
+            ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'
+            ctx.lineWidth = 1
+            ctx.beginPath()
+            ctx.moveTo(ex+e.w/2, e.y+4); ctx.lineTo(ex+e.w/2+2, e.y+e.h-4)
+            ctx.stroke()
           }
         }
       }
+      // Screen flash (boss kill)
+      if(flashScreen > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${flashScreen/28})`
+        ctx.fillRect(0, 0, W, H)
+      }
       // Player (espresso cup) — clignote pendant invincibilité
       const blink = player.invincible > 0 && Math.floor(player.invincible/4)%2 === 0
+      const hasGoldSkin = goldenSkinRef.current
       if(!blink){
-        drawCup(player.x, player.y, player.w, player.h, TT.gold, '#3a1a08')
-        ctx.fillStyle = isLight ? '#7a5618' : '#c8a060'
+        const cupBody = hasGoldSkin ? '#d4a030' : TT.gold
+        const cupLiquid = hasGoldSkin ? '#5a3a08' : '#3a1a08'
+        const cupRim = hasGoldSkin ? '#e0b840' : (isLight ? '#7a5618' : '#c8a060')
+        // Visual power-up indicators on ship
+        if(pu.double > 0) {
+          // Wider cup for double
+          drawCup(player.x-3, player.y, player.w+6, player.h, cupBody, cupLiquid)
+        } else {
+          drawCup(player.x, player.y, player.w, player.h, cupBody, cupLiquid)
+        }
+        ctx.fillStyle = cupRim
         ctx.fillRect(player.x+5, player.y+8, player.w-10, 1)
+        // Triple: glowing rim
+        if(pu.triple > 0) {
+          ctx.strokeStyle = TT.purple
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w/2+3, 0, Math.PI*2)
+          ctx.stroke()
+        }
+        // Rapid: pulse outline
+        if(pu.rapid > 0) {
+          const rp = Math.sin(frame*0.3)*0.4+0.6
+          ctx.strokeStyle = `rgba(212,176,64,${rp})`
+          ctx.lineWidth = 2
+          ctx.strokeRect(player.x-2, player.y-2, player.w+4, player.h+4)
+        }
+        // x2: golden halo
+        if(pu.x2 > 0) {
+          const xp = Math.sin(frame*0.25)*0.3+0.7
+          ctx.fillStyle = `rgba(100,200,80,${xp*0.3})`
+          ctx.beginPath()
+          ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w/2+8, 0, Math.PI*2)
+          ctx.fill()
+        }
+        // Golden skin sparkle
+        if(hasGoldSkin && frame % 12 < 6) {
+          ctx.fillStyle = '#ffe8a0'
+          const sx = player.x + rand(2, player.w-4)
+          const sy = player.y + rand(2, player.h-4)
+          ctx.fillRect(sx, sy, 2, 2)
+        }
       }
-      // Shield
+      // Shield halo
       if(player.shield > 0) {
         ctx.strokeStyle = TT.blue
         ctx.lineWidth = 2
@@ -2231,6 +2414,8 @@ function CoffeeInvaders({ onClose, T }) {
         ctx.fillText(waveAnnounceText, (W-tw)/2, H/2)
         ctx.globalAlpha = 1
       }
+      // Achievement popup (handled by React, but we draw a flash too)
+      // The actual popup is rendered in the React UI below
     }
 
     const update = () => {
@@ -2244,6 +2429,24 @@ function CoffeeInvaders({ onClose, T }) {
       if(shake > 0) shake--
       if(comboTimer > 0) { comboTimer--; if(comboTimer === 0) combo = 0 }
       if(waveAnnounceTimer > 0) waveAnnounceTimer--
+      if(flashScreen > 0) flashScreen--
+      // Achievement popup decay
+      if(achPopupTimerRef.current) {
+        achPopupTimerRef.current--
+        if(achPopupTimerRef.current <= 0) {
+          setAchPopup(null)
+          achPopupTimerRef.current = null
+        }
+      }
+
+      // Evolving background beat (Space Invaders heart)
+      const beatInterval = Math.max(8, 50 - wave*3)
+      if(frame % beatInterval === 0) {
+        sfx(110 + wave*6, 0.04, 'square', 0.025, 55 + wave*3)
+      }
+
+      // Achievement checks
+      checkAchievements()
 
       // Player movement
       const t = touchRef.current
@@ -2296,29 +2499,64 @@ function CoffeeInvaders({ onClose, T }) {
               boss.lastShot = frame
             }
           } else {
-            // Formation movement (modulé par difficulté)
-            const baseSpeed = (0.35 + wave*0.07 + (1 - aliveEnemies.length / Math.max(1, enemies.length))*1.0) * diff.speed
+            // Formation movement (modulé par difficulté) — skip minis
+            const formation = aliveEnemies.filter(e => !e.mini)
+            const baseSpeed = (0.35 + wave*0.07 + (1 - formation.length / Math.max(1, enemies.filter(e=>!e.mini).length))*1.0) * diff.speed
             let minX = Infinity, maxX = -Infinity, maxY = -Infinity
-            for(const e of aliveEnemies){
+            for(const e of formation){
               if(e.x < minX) minX = e.x
               if(e.x + e.w > maxX) maxX = e.x + e.w
               if(e.y + e.h > maxY) maxY = e.y + e.h
             }
             let drop = false
             if(maxX + baseSpeed*dirX >= W || minX + baseSpeed*dirX <= 0) { dirX *= -1; drop = true }
-            for(const e of aliveEnemies) {
+            for(const e of formation) {
               let s = baseSpeed
               if(e.type === 'fast') s *= 1.7
-              e.x += s * dirX
-              if(drop) e.y += 12
-              if(e.type === 'zigzag') e.x += Math.sin((frame*0.05)+e.zigPhase) * 0.7
+              if(e.type === 'teleporter') {
+                // Teleporter blinks around
+                e.teleTimer--
+                if(e.teleTimer <= 0) {
+                  e.teleTimer = rand(50, 110)
+                  e.x = rand(20, W - e.w - 20)
+                  e.y = rand(40, H*0.5)
+                  spawnParticles(e.x+e.w/2, e.y+e.h/2, '#b888e0', 8)
+                  sfx(700, 0.04, 'sine', 0.04, 1100)
+                }
+              } else {
+                e.x += s * dirX
+                if(drop) e.y += 12
+                if(e.type === 'zigzag') e.x += Math.sin((frame*0.05)+e.zigPhase) * 0.7
+              }
             }
+            // Mini enemies move independently (bounce)
+            for(const e of aliveEnemies) {
+              if(!e.mini) continue
+              e.x += Math.sin(frame*0.1 + e.wobble) * 1.2
+              e.y += 0.8 + wave*0.04
+              if(e.x < 0 || e.x+e.w > W) e.wobble += Math.PI
+              e.x = Math.max(0, Math.min(W-e.w, e.x))
+              if(e.y + e.h > player.y) { die(); return }
+            }
+            // Danger phase detection
+            dangerRef.current = maxY > H*0.55
             // Enemy shooting
             const shootInt = Math.max(22, 95 - wave*5)
             if(frame - lastEnemyShot > shootInt) {
-              const shooter = aliveEnemies[Math.floor(Math.random()*aliveEnemies.length)]
-              const bspd = 2.4 + wave*0.12
-              enemyBullets.push({ x: shooter.x+shooter.w/2-2, y: shooter.y+shooter.h, w:4, h:8, vy:bspd, vx:0 })
+              const shooters = aliveEnemies.filter(e => !e.mini)
+              if(shooters.length > 0) {
+                const shooter = shooters[Math.floor(Math.random()*shooters.length)]
+                const bspd = 2.4 + wave*0.12
+                if(shooter.type === 'teleporter') {
+                  // Aimed shot towards player
+                  const dx = player.x + player.w/2 - (shooter.x + shooter.w/2)
+                  const dy = player.y + player.h/2 - (shooter.y + shooter.h)
+                  const dist = Math.sqrt(dx*dx + dy*dy) || 1
+                  enemyBullets.push({ x: shooter.x+shooter.w/2-3, y: shooter.y+shooter.h, w:5, h:9, vy: bspd*dy/dist, vx: bspd*dx/dist })
+                } else {
+                  enemyBullets.push({ x: shooter.x+shooter.w/2-2, y: shooter.y+shooter.h, w:4, h:8, vy:bspd, vx:0 })
+                }
+              }
               lastEnemyShot = frame
             }
             // Enemies reach player → game over
@@ -2341,11 +2579,21 @@ function CoffeeInvaders({ onClose, T }) {
         for(const e of enemies) {
           if(!e.alive) continue
           if(b.x < e.x+e.w && b.x+b.w > e.x && b.y < e.y+e.h && b.y+b.h > e.y) {
-            e.hp--
             b.y = -100
+            // Shielder: shield absorbs first hit
+            if(e.shield) {
+              e.shield = false
+              const TTs = themeRef.current
+              spawnParticles(e.x+e.w/2, e.y+e.h/2, TTs.blue, 10)
+              floatText(e.x+e.w/2, e.y, 'SHIELD OFF', TTs.blue)
+              sfx(440, 0.06, 'triangle', 0.06, 220)
+              try { navigator.vibrate?.(15) } catch {}
+              break
+            }
+            e.hp--
             if(e.hp <= 0) {
               e.alive = false
-              const basePts = e.type==='boss' ? (150+wave*15) : (e.type==='tank' ? 25 : (e.type==='zigzag' ? 20 : (e.type==='fast' ? 30 : 10)))
+              const basePts = e.type==='boss' ? (150+wave*15) : (e.type==='tank'||e.type==='shielder' ? 25 : (e.type==='zigzag' ? 20 : (e.type==='fast' ? 30 : (e.type==='splitter' ? 20 : (e.type==='teleporter' ? 35 : 10)))))
               const before = score
               gainScore(basePts)
               bumpCombo()
@@ -2354,19 +2602,48 @@ function CoffeeInvaders({ onClose, T }) {
               floatText(e.x+e.w/2, e.y, `+${gained}`, TTk.gold)
               const isLightK = TTk === LIGHT
               const altPalette = isLightK
-                ? { basic:'#3a8a60', fast:'#2a7aaa', zigzag:'#aa5530', tank:'#6a4aaa' }
-                : { basic:'#7acca0', fast:'#a8d4f0', zigzag:'#e0a878', tank:'#a888d4' }
+                ? { basic:'#3a8a60', fast:'#2a7aaa', zigzag:'#aa5530', tank:'#6a4aaa', splitter:'#d08030', shielder:'#4a80aa', teleporter:'#8a4aaa' }
+                : { basic:'#7acca0', fast:'#a8d4f0', zigzag:'#e0a878', tank:'#a888d4', splitter:'#f0a040', shielder:'#7ab0e0', teleporter:'#b888e0' }
               const col = altPalette[e.type] || TTk.red
-              spawnParticles(e.x+e.w/2, e.y+e.h/2, col, e.type==='boss' ? 30 : 8)
-              if(e.type==='boss'){ triggerShake(14); sfx(110, 0.45, 'sawtooth', 0.13, 40) }
-              else if(e.type==='tank'){ sfx(330, 0.10, 'sawtooth', 0.06, 110) }
-              else { sfx(660, 0.05, 'square', 0.05) }
-              const dropChance = e.type==='boss' ? 1 : (e.type==='tank' ? 0.25 : 0.07)
+              // Death animation: shatter particles
+              const particleCount = e.type==='boss' ? 36 : (e.type==='tank'||e.type==='splitter' ? 16 : 10)
+              for(let i=0;i<particleCount;i++){
+                const angle = (Math.PI*2*i)/particleCount + rand(-0.2,0.2)
+                const spd = rand(0.8, 3.5)
+                particles.push({
+                  x: e.x+e.w/2, y: e.y+e.h/2,
+                  vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd,
+                  life: rand(18, 35), color: col,
+                })
+              }
+              // Screen flash on boss kill
+              if(e.type==='boss'){ triggerShake(16); sfx(110, 0.45, 'sawtooth', 0.13, 40); flashScreen = 14; try { navigator.vibrate?.([30,50,100]) } catch {} }
+              else if(e.type==='tank'){ sfx(330, 0.10, 'sawtooth', 0.06, 110); try { navigator.vibrate?.(20) } catch {} }
+              else if(e.type==='splitter'){ sfx(280, 0.10, 'sawtooth', 0.07, 140); try { navigator.vibrate?.([10,30,10]) } catch {} }
+              else if(e.type==='shielder'){ sfx(550, 0.08, 'triangle', 0.06, 330) }
+              else if(e.type==='teleporter'){ sfx(800, 0.07, 'sine', 0.05, 1200) }
+              else { sfx(660, 0.05, 'square', 0.05); try { navigator.vibrate?.(10) } catch {} }
+              // Splitter: spawn 2 mini enemies
+              if(e.type==='splitter' && !e.mini) {
+                for(let s=-1; s<=1; s+=2) {
+                  enemies.push({
+                    x: e.x+e.w/2-10+s*12, y: e.y+e.h/2-5,
+                    w:16, h:12, alive:true, row:e.row, col:e.col,
+                    type:'splitter', hp:1, mini:true,
+                    wobble: rand(0,2), zigPhase: rand(0, Math.PI*2),
+                  })
+                }
+              }
+              const dropChance = e.type==='boss' ? 1 : (e.type==='tank'||e.type==='shielder' ? 0.28 : (e.type==='teleporter' ? 0.18 : 0.07))
               if(Math.random() < dropChance) spawnPowerup(e.x+e.w/2, e.y+e.h/2)
               if(e.type==='boss') {
                 spawnPowerup(e.x+20, e.y+e.h/2)
                 spawnPowerup(e.x+e.w-20, e.y+e.h/2)
+                flashScreen = 14
               }
+              // Speed Drinker check
+              lastKillTimes.push(frame)
+              if(lastKillTimes.length > 3) lastKillTimes.shift()
             } else {
               sfx(440, 0.03, 'square', 0.03)
             }
@@ -2473,11 +2750,27 @@ function CoffeeInvaders({ onClose, T }) {
   const onCanvasPointerDown = (e) => {
     if(status !== 'playing') return
     if(paused){ e.preventDefault(); setPaused(false); return }
+    // Easter egg: tap score 10 times to unlock golden skin
+    const cx = mapPointerToCanvas(e.clientX)
+    const cy = (() => { const c = canvasRef.current; if(!c) return 0; const r = c.getBoundingClientRect(); return (e.clientY - r.top) * (c.height / r.height) })()
+    if(cx !== null && cx >= 8 && cx <= 128 && cy >= 4 && cy <= 20) {
+      const now = Date.now()
+      const st = scoreTapRef.current
+      if(now - st.lastTime > 2000) st.count = 0
+      st.count++; st.lastTime = now
+      try { navigator.vibrate?.(5) } catch {}
+      if(st.count >= 10 && !goldenSkin) {
+        setGoldenSkin(true)
+        try { localStorage.setItem(INVADERS_GOLDEN_KEY, '1') } catch {}
+        // Will be awarded as achievement at next check
+      }
+      return
+    }
     if(controlMode !== 'swipe') return
     e.preventDefault()
     try { e.target.setPointerCapture(e.pointerId) } catch {}
     touchRef.current.dragging = true
-    touchRef.current.targetX = mapPointerToCanvas(e.clientX)
+    touchRef.current.targetX = cx
   }
   const onCanvasPointerMove = (e) => {
     if(!touchRef.current.dragging) return
@@ -2582,7 +2875,54 @@ function CoffeeInvaders({ onClose, T }) {
                 touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
               }}>{soundOn?'🔊 SON ON':'🔇 SON OFF'}</button>
             </div>
+            {/* Achievements */}
+            {achievements.length > 0 && (
+              <div style={{marginTop:4,width:'100%',maxWidth:280}}>
+                <div style={{fontFamily:'monospace',fontSize:9,color:T.textDim,letterSpacing:'0.2em',textAlign:'center',marginBottom:6}}>SUCCÈS ({achievements.length}/{ACHIEVEMENTS.length})</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:4,justifyContent:'center'}}>
+                  {ACHIEVEMENTS.map(a => {
+                    const earned = achievements.includes(a.id)
+                    return (
+                      <div key={a.id} title={earned ? a.label+' — '+a.desc : '???'} style={{
+                        padding:'3px 7px',borderRadius:4,
+                        background: earned ? `${a.color}22` : T.bg3,
+                        border: `1px solid ${earned ? a.color+'88' : T.border}`,
+                        color: earned ? a.color : T.textMute,
+                        fontFamily:'monospace',fontSize:10,
+                        opacity: earned ? 1 : 0.45,
+                      }}>
+                        {earned ? a.icon : '?'} {earned ? a.label : '???'}
+                      </div>
+                    )
+                  })}
+                  {goldenSkin && (
+                    <div style={{padding:'3px 7px',borderRadius:4,background:`${T.gold}22`,border:`1px solid ${T.gold}88`,color:T.gold,fontFamily:'monospace',fontSize:10}}>✨ Golden Skin</div>
+                  )}
+                </div>
+              </div>
+            )}
             <button onClick={startGame} style={playBtn}>▶ JOUER</button>
+          </div>
+        )}
+        {/* Achievement popup during gameplay */}
+        {status === 'playing' && achPopup && (
+          <div style={{position:'absolute',top:8,left:0,right:0,display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:10}}>
+            {(() => {
+              const a = ACHIEVEMENTS.find(x=>x.id===achPopup.id)
+              if(!a) return null
+              return (
+                <div style={{
+                  padding:'6px 18px',borderRadius:6,
+                  background: `${a.color}28`,
+                  border: `2px solid ${a.color}`,
+                  color: a.color,
+                  fontFamily:'monospace',fontSize:12,fontWeight:700,letterSpacing:'0.1em',
+                  animation: 'none',
+                }}>
+                  {a.icon} {a.label} — DÉBLOQUÉ!
+                </div>
+              )
+            })()}
           </div>
         )}
         {status === 'lost' && (
