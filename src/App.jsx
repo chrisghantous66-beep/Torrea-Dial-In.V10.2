@@ -4869,7 +4869,8 @@ function WelcomeModal({ onClose, T }) {
     <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',background:'rgba(0,0,0,0.72)',backdropFilter:'blur(4px)'}}>
       <div style={{background:T.bg2,border:`1px solid ${T.gold}66`,borderRadius:14,maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:`0 8px 40px rgba(0,0,0,0.6)`}}>
         {/* Header */}
-        <div style={{padding:'24px 20px 16px',borderBottom:`1px solid ${T.border}`,textAlign:'center'}}>
+        <div style={{padding:'24px 20px 16px',borderBottom:`1px solid ${T.border}`,textAlign:'center',position:'relative'}}>
+          <button onClick={onClose} style={{position:'absolute',top:8,right:12,background:'transparent',border:'none',color:T.textDim,cursor:'pointer',fontSize:20,lineHeight:1,padding:'4px 8px',touchAction:'manipulation'}}>×</button>
           <div style={{fontSize:26,fontWeight:900,color:T.gold,fontFamily:'Georgia,serif',letterSpacing:'-0.02em',lineHeight:1}}>TORREA</div>
           <div style={{fontSize:9,letterSpacing:'0.55em',color:T.textMute,marginTop:3}}>DIAL-IN SYSTEM</div>
           <div style={{marginTop:12,fontSize:13,color:T.textDim,lineHeight:1.5}}>
