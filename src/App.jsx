@@ -156,7 +156,7 @@ const STORAGE_KEY = 'torrea_v3'
 const COFFEE_LIB_KEY = 'torrea_coffees'
 const PARAMS_KEY = 'torrea_params_v1'
 const SAVED_RECIPES_KEY = 'torrea_saved_recipes_v1'
-const WELCOME_KEY = 'torrea_welcome_v2'
+
 const FAV_GRINDERS_KEY = 'torrea_fav_grinders_v1'
 const FAV_MACHINES_KEY = 'torrea_fav_machines_v1'
 function loadSavedParams() {
@@ -4585,8 +4585,8 @@ function WelcomeModal({ onClose, T }) {
 export default function App() {
   const [darkMode,setDarkMode]=useState(true)
   const T=darkMode?DARK:LIGHT
-  const [showWelcome,setShowWelcome]=useState(()=>{try{return!localStorage.getItem(WELCOME_KEY)}catch{return true}})
-  const closeWelcome=()=>{try{localStorage.setItem(WELCOME_KEY,'1')}catch{};setShowWelcome(false)}
+  const [showWelcome,setShowWelcome]=useState(true)
+  const closeWelcome=()=>{setShowWelcome(false)}
   const [mainTab,setMainTab]=useState('calibration')
   const [subTab,setSubTab]=useState('moulin')
   const [coffee,setCoffee]=useState({name:'',country:'',variety:'',profile:'',process:'',roastDate:''})
