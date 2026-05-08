@@ -1776,13 +1776,13 @@ const INVADERS_ACHIEVEMENTS_KEY = 'torrea_invaders_achievements'
 const INVADERS_GOLDEN_KEY = 'torrea_invaders_golden'
 
 const ACHIEVEMENTS = [
-  { id:'first_blood', label:'First Blood', desc:'Terminer la vague 1', icon:'☕', color:'#7acca0' },
-  { id:'combo_king', label:'Combo King', desc:'Atteindre combo ×10', icon:'🔥', color:'#e0a030' },
-  { id:'bomb_squad', label:'Bomb Squad', desc:'Tuer un boss avec une bombe', icon:'💣', color:'#d47a7a' },
+  { id:'first_blood', label:'First Coffee', desc:'Terminer la vague 1', icon:'☕', color:'#7acca0' },
+  { id:'combo_king', label:'Super Shot', desc:'Atteindre combo ×10', icon:'🔥', color:'#e0a030' },
+  { id:'bomb_squad', label:'Caffeine Bomb', desc:'Tuer un boss avec une bombe', icon:'💣', color:'#d47a7a' },
   { id:'untouchable', label:'Untouchable', desc:'Finir une vague sans dégât', icon:'🛡', color:'#7ab0e0' },
   { id:'wave_10', label:'Wave 10', desc:'Atteindre la vague 10', icon:'👑', color:'#d4b040' },
   { id:'speed_drinker', label:'Speed Drinker', desc:'Tuer 3 ennemis en 1 seconde', icon:'⚡', color:'#c0a0e0' },
-  { id:'golden_boy', label:'Golden Boy', desc:'Activer le skin doré secret', icon:'✨', color:'#d4b040' },
+  { id:'golden_boy', label:'Golden Espresso', desc:'Activer le skin doré secret', icon:'✨', color:'#d4b040' },
 ]
 
 // ── Audio mini-engine (lazy init) ──
@@ -2906,20 +2906,24 @@ function CoffeeInvaders({ onClose, T }) {
         )}
         {/* Achievement popup during gameplay */}
         {status === 'playing' && achPopup && (
-          <div style={{position:'absolute',top:8,left:0,right:0,display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:10}}>
+          <div style={{position:'absolute',top:46,left:0,right:0,display:'flex',justifyContent:'center',zIndex:10}}>
             {(() => {
               const a = ACHIEVEMENTS.find(x=>x.id===achPopup.id)
               if(!a) return null
               return (
                 <div style={{
-                  padding:'6px 18px',borderRadius:6,
+                  padding:'6px 10px 6px 18px',borderRadius:6,
                   background: `${a.color}28`,
                   border: `2px solid ${a.color}`,
                   color: a.color,
                   fontFamily:'monospace',fontSize:12,fontWeight:700,letterSpacing:'0.1em',
-                  animation: 'none',
+                  display:'flex',alignItems:'center',gap:10,
                 }}>
-                  {a.icon} {a.label} — DÉBLOQUÉ!
+                  <span>{a.icon} {a.label} — DÉBLOQUÉ!</span>
+                  <button onClick={(e)=>{ e.stopPropagation(); setAchPopup(null); achPopupTimerRef.current = null }} style={{
+                    background:'transparent',border:'none',color:a.color,cursor:'pointer',
+                    fontSize:16,lineHeight:1,padding:'2px 4px',touchAction:'manipulation',
+                  }}>×</button>
                 </div>
               )
             })()}
