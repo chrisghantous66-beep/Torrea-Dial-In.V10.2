@@ -33,8 +33,8 @@ const GRINDERS = {
   baratza_encore:      { label:'Encore',          brand:'Baratza', clicks:40,  unit:'clic',    minµm:250, maxµm:1150, espresso:[5,12],  filter:[18,28], aeropress:[10,22], chemex:[20,30], moka:[8,14],  description:'40 réglages · 250–1150µm' },
   baratza_encore_esp:  { label:'Encore ESP',      brand:'Baratza', clicks:40,  unit:'clic',    minµm:200, maxµm:1150, espresso:[2,12],  filter:[16,28], aeropress:[8,22],  chemex:[18,30], moka:[6,14],  description:'40 réglages · 200–1150µm' },
   baratza_virtuoso:    { label:'Virtuoso+',        brand:'Baratza', clicks:40,  unit:'clic',    minµm:250, maxµm:1100, espresso:[5,12],  filter:[18,28], aeropress:[10,22], chemex:[20,28], moka:[8,14],  description:'40 réglages · 250–1100µm' },
-  baratza_vario:       { label:'Vario / Vario+',  brand:'Baratza', clicks:230, unit:'clic',    minµm:200, maxµm:1300, espresso:[40,80], filter:[100,180],aeropress:[60,140],chemex:[120,200],moka:[50,90], description:'230 réglages · 200–1300µm' },
-  baratza_sette270:    { label:'Sette 270',        brand:'Baratza', clicks:270, unit:'réglage', minµm:200, maxµm:700,  espresso:[1,60],  filter:[120,200],aeropress:[60,150],chemex:[140,220],moka:[30,80], description:'270 micro-réglages · espresso' },
+  baratza_vario:       { label:'Vario / Vario+',  brand:'Baratza', clicks:230, unit:'clic',    minµm:200, maxµm:1300, step:1, espresso:[40,80], filter:[100,180],aeropress:[60,140],chemex:[120,200],moka:[50,90], description:'230 réglages · 200–1300µm' },
+  baratza_sette270:    { label:'Sette 270',        brand:'Baratza', clicks:270, unit:'réglage', minµm:200, maxµm:700,  step:1, espresso:[1,60],  filter:[120,200],aeropress:[60,150],chemex:[140,220],moka:[30,80], description:'270 micro-réglages · espresso' },
 
   // ── Mahlkönig ──
   mahlkonig_e65s: { label:'E65S',  brand:'Mahlkönig', clicks:null, unit:'µm', minµm:100, maxµm:1200, espresso:[200,400], filter:[500,900], aeropress:[350,700], chemex:[600,900],  moka:[300,500], description:'Affichage µm direct · professionnel' },
@@ -49,16 +49,17 @@ const GRINDERS = {
   niche_zero: { label:'Zero', brand:'Niche', clicks:50, unit:'numéro', minµm:200, maxµm:1100, espresso:[15,22], filter:[30,45], aeropress:[22,38], chemex:[35,48], moka:[18,26], description:'50 numéros · single-dose de référence' },
   niche_duo:  { label:'Duo',  brand:'Niche', clicks:50, unit:'numéro', minµm:200, maxµm:1100, espresso:[15,22], filter:[30,45], aeropress:[22,38], chemex:[35,48], moka:[18,26], description:'50 numéros · double sortie' },
 
-  // ── Comandante ── (sources : honestcoffeeguide, James Hoffmann, basicbarista, ~30µm/clic)
-  comandante_c40:      { label:'C40 MK4',                 brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, espresso:[7,15],  filter:[18,28], aeropress:[15,25], chemex:[25,32], moka:[14,22], description:'~30µm/clic · 0–1200µm · référence manuel' },
-  comandante_c40_red:  { label:'C40 MK4 (Red Clix)',      brand:'Comandante', clicks:80, unit:'clic', minµm:0,   maxµm:1200, espresso:[14,30], filter:[36,56], aeropress:[30,50], chemex:[50,64], moka:[28,44], description:'Red Clix ~15µm/clic · résolution doublée' },
-  comandante_c60:      { label:'C60 Baracuda',            brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, espresso:[6,13],  filter:[16,26], aeropress:[13,23], chemex:[23,30], moka:[12,20], description:'60mm burrs · plus rapide que C40' },
+  // ── Comandante ── (sources : honestcoffeeguide, basicbarista, completehomebarista — 2026)
+  comandante_c40:      { label:'C40 MK4',                 brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, step:0.5, espresso:[7,15],  filter:[18,30], aeropress:[15,22], chemex:[28,36], moka:[14,22], description:'~30µm/clic · 0–1200µm · référence manuel' },
+  comandante_c40_red:  { label:'C40 MK4 (Red Clix)',      brand:'Comandante', clicks:80, unit:'clic', minµm:0,   maxµm:1200, step:0.5, espresso:[14,30], filter:[36,60], aeropress:[30,44], chemex:[56,72], moka:[28,44], description:'Red Clix ~15µm/clic · résolution doublée' },
+  comandante_c60:      { label:'C60 Baracuda',            brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, step:0.5, espresso:[6,13],  filter:[16,26], aeropress:[13,23], chemex:[23,30], moka:[12,20], description:'60mm burrs · plus rapide que C40' },
 
-  // ── 1Zpresso ── (specs officielles 1zpresso.coffee/grind-setting · réglage en rotations)
-  zpresso_jmax:    { label:'J-Max',       brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:25,  maxµm:1190, espresso:[0.8,1.7], filter:[1.8,3.3], aeropress:[1.5,3.0], chemex:[2.4,3.5], moka:[1.6,2.9], description:'External · 9 num/rot · 90 clics/rot · 8,8µm/clic · 4,5 rot max' },
-  zpresso_jxpro:   { label:'JX-Pro S',    brand:'1Zpresso', clicks:4.8, unit:'rot', minµm:50,  maxµm:1300, espresso:[0.8,1.5], filter:[2.5,3.6], aeropress:[1.8,3.2], chemex:[3.0,3.8], moka:[1.5,2.5], description:'Top · 10 num/rot · 40 clics/rot · 12,5µm/clic · 4,8 rot max' },
-  zpresso_kmax:    { label:'K-Max',       brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:50,  maxµm:1500, espresso:[0.5,1.2], filter:[1.5,2.5], aeropress:[1.0,2.0], chemex:[2.0,2.8], moka:[0.8,1.5], description:'External · 9 num/rot · 90 clics/rot · 22µm/clic · K-series filter-friendly' },
-  zpresso_zp6:     { label:'ZP6 Special', brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:50,  maxµm:1500, espresso:[0.5,1.2], filter:[1.5,2.5], aeropress:[1.0,2.0], chemex:[2.0,2.8], moka:[0.8,1.5], description:'External · 9 num/rot · 90 clics/rot · 22µm/clic · burrs brewing-spec' },
+  // ── 1Zpresso ── (specs officielles 1zpresso.coffee/grind-setting · vérifié 2026)
+  // Format réglage : 'rot' = nombre de rotations depuis zéro (décimal supporté, ex: 1.4.4 = 1.49 rot)
+  zpresso_jmax:    { label:'J-Max',       brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:0,   maxµm:1190, step:0.1, decimals:1, espresso:[1.0,1.7], filter:[2.6,3.2], aeropress:[1.8,2.6], chemex:[3.0,3.6], moka:[1.6,2.4], description:'External · 90 clics/rot · 8,8µm/clic · 0–1190µm · 4,5 rot max' },
+  zpresso_jxpro:   { label:'JX-Pro S',    brand:'1Zpresso', clicks:4.8, unit:'rot', minµm:0,   maxµm:915,  step:0.1, decimals:1, espresso:[0.8,1.5], filter:[2.4,3.4], aeropress:[1.8,2.8], chemex:[3.0,3.8], moka:[1.5,2.5], description:'Top · 40 clics/rot · 12,5µm/clic · 0–915µm · 4,8 rot max' },
+  zpresso_kmax:    { label:'K-Max',       brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:0,   maxµm:1400, step:0.1, decimals:1, espresso:[0.6,1.1], filter:[1.6,2.6], aeropress:[1.1,2.0], chemex:[2.2,2.9], moka:[0.9,1.5], description:'External · 90 clics/rot · 22µm/clic · 0–1400µm · K-series filter-friendly' },
+  zpresso_zp6:     { label:'ZP6 Special', brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:0,   maxµm:1400, step:0.1, decimals:1, espresso:[0.6,1.1], filter:[1.6,2.6], aeropress:[1.1,2.0], chemex:[2.2,2.9], moka:[0.9,1.5], description:'External · 90 clics/rot · 22µm/clic · burrs brewing-spec' },
 
   // ── Timemore ──
   timemore_c2:     { label:'C2',       brand:'Timemore', clicks:20, unit:'clic', minµm:250, maxµm:1000, espresso:[8,15],  filter:[14,22], aeropress:[10,18], chemex:[16,24], moka:[9,14],  description:'20 clics/tour · rapport qualité/prix' },
@@ -66,8 +67,8 @@ const GRINDERS = {
   timemore_slim6:  { label:'Slim 6',   brand:'Timemore', clicks:60, unit:'clic', minµm:200, maxµm:900,  espresso:[6,12],  filter:[18,30], aeropress:[10,22], chemex:[20,32], moka:[7,14],  description:'60 réglages · compact voyage' },
 
   // ── Fellow ──
-  fellow_ode2:  { label:'Ode Gen 2',  brand:'Fellow', clicks:110, unit:'réglage', minµm:350, maxµm:1100, espresso:[2,10],  filter:[40,80], aeropress:[20,60],  chemex:[55,90], moka:[15,35], description:'11 macro × 10 micro · optimisé filter' },
-  fellow_opus:  { label:'Opus',       brand:'Fellow', clicks:110, unit:'réglage', minµm:200, maxµm:1100, espresso:[2,18],  filter:[50,90], aeropress:[20,65],  chemex:[60,95], moka:[10,30], description:'110 réglages · espresso + filter' },
+  fellow_ode2:  { label:'Ode Gen 2',  brand:'Fellow', clicks:110, unit:'réglage', minµm:350, maxµm:1100, step:1, espresso:[2,10],  filter:[40,80], aeropress:[20,60],  chemex:[55,90], moka:[15,35], description:'11 macro × 10 micro · optimisé filter' },
+  fellow_opus:  { label:'Opus',       brand:'Fellow', clicks:110, unit:'réglage', minµm:200, maxµm:1100, step:1, espresso:[2,18],  filter:[50,90], aeropress:[20,65],  chemex:[60,95], moka:[10,30], description:'110 réglages · espresso + filter' },
 
   // ── Wilfa ──
   wilfa_svart: { label:'Svart Aroma',  brand:'Wilfa', clicks:6, unit:'position', minµm:300, maxµm:1000, espresso:[1,2], filter:[3,5], aeropress:[2,4], chemex:[4,6], moka:[1,3], description:'6 positions · simple et efficace' },
@@ -282,11 +283,14 @@ function analyzeHistory(history){
 
 // Convert µm value to native grinder setting
 function µmToSetting(µm, g) {
-  if (!g || g.label === '— Sélectionner un moulin —' || !g.clicks || !g.minµm) return null
+  if (!g || g.label === '— Sélectionner un moulin —' || !g.clicks || g.minµm == null) return null
   const pct = (µm - g.minµm) / (g.maxµm - g.minµm)
   const raw = pct * g.clicks
-  if (g.unit === 'rot') return Math.max(0.1, Math.round(raw * 10) / 10)
-  return Math.max(1, Math.round(raw))
+  // Précision : utilise g.decimals si défini, sinon comportement par défaut (1 déc pour rot, entier sinon)
+  const decimals = g.decimals != null ? g.decimals : (g.unit === 'rot' ? 1 : 0)
+  const factor = Math.pow(10, decimals)
+  const min = decimals > 0 ? Math.pow(10, -decimals) : 1
+  return Math.max(min, Math.round(raw * factor) / factor)
 }
 
 // ─── ALGORITHMES ──────────────────────────────────────────────────────────────
@@ -2180,13 +2184,17 @@ function CoffeeInvaders({ onClose, T }) {
       ctx.font = 'bold 11px monospace'
       ctx.fillText(`SCORE ${score}`, 8, 16)
       const wt = `VAGUE ${wave}`
-      ctx.fillText(wt, W - ctx.measureText(wt).width - 8, 16)
-      // Lives (cœurs)
+      const wtw = ctx.measureText(wt).width
+      ctx.fillText(wt, W - wtw - 8, 16)
+      // Lives (cœurs) — en haut à droite, sous la vague (alignés à droite)
       const heart = '♥'
-      ctx.font = 'bold 12px monospace'
+      ctx.font = 'bold 13px monospace'
+      const heartW = 13
+      const heartsTotalW = diff.lives * heartW
+      const heartsStartX = W - heartsTotalW - 8
       for(let i=0;i<diff.lives;i++){
         ctx.fillStyle = i<lives ? TT.red : (isLight ? '#cccccc' : '#3a3a44')
-        ctx.fillText(heart, 8 + i*14, 30)
+        ctx.fillText(heart, heartsStartX + i*heartW, 32)
       }
       const hs = hiscoreRef.current
       if(hs.score > 0) {
@@ -4235,6 +4243,21 @@ function TabRecettes({T,coffee,setCoffee}){
 }
 
 // ─── COMPARATEUR DE MOULIN ───────────────────────────────────────────────────
+// Helpers de précision adaptative
+const grinderStep = (g) => g?.step != null ? g.step : (g?.unit === 'rot' ? 0.1 : 1)
+const grinderDecimals = (g) => {
+  if (g?.decimals != null) return g.decimals
+  if (g?.unit === 'rot') return 1
+  if (g?.step && g.step < 1) return g.step >= 0.5 ? 1 : 2
+  return 0
+}
+const fmtVal = (v, g) => {
+  if (v == null) return '—'
+  const d = grinderDecimals(g)
+  return Number(v).toFixed(d)
+}
+const roundToStep = (v, step) => Math.round(v / step) * step
+
 function TabComparateur({ T }) {
   const [fromId, setFromId] = useState('none')
   const [toId,   setToId]   = useState('none')
@@ -4243,21 +4266,36 @@ function TabComparateur({ T }) {
   const fromG = fromId !== 'none' ? GRINDERS[fromId] : null
   const toG   = toId   !== 'none' ? GRINDERS[toId]   : null
 
-  const sourceµm = fromG
+  // µm source — pas d'arrondi intermédiaire, garde la précision pour le calcul cible
+  const sourceµmRaw = fromG
     ? fromG.clicks
-      ? Math.round(fromG.minµm + (fromVal / fromG.clicks) * (fromG.maxµm - fromG.minµm))
+      ? fromG.minµm + (fromVal / fromG.clicks) * (fromG.maxµm - fromG.minµm)
       : fromVal
     : null
+  const sourceµm = sourceµmRaw != null ? Math.round(sourceµmRaw) : null
 
-  const targetVal = toG && sourceµm !== null
+  // Cible — précision décimale adaptative
+  const targetValRaw = toG && sourceµmRaw !== null
     ? toG.clicks
-      ? Math.round((sourceµm - toG.minµm) / (toG.maxµm - toG.minµm) * toG.clicks)
-      : sourceµm
+      ? (sourceµmRaw - toG.minµm) / (toG.maxµm - toG.minµm) * toG.clicks
+      : sourceµmRaw
+    : null
+  const targetStep = toG ? grinderStep(toG) : 1
+  const targetVal = targetValRaw != null
+    ? toG?.clicks
+      ? Math.max(targetStep, roundToStep(targetValRaw, targetStep))
+      : Math.round(targetValRaw / 5) * 5 // arrondi 5µm pour stepless
     : null
 
   const inRange = toG && sourceµm !== null && sourceµm >= toG.minµm && sourceµm <= toG.maxµm
   const µmPerFrom = fromG?.clicks ? Math.round((fromG.maxµm - fromG.minµm) / fromG.clicks * 10) / 10 : null
   const µmPerTo   = toG?.clicks   ? Math.round((toG.maxµm   - toG.minµm)   / toG.clicks   * 10) / 10 : null
+
+  // Précision affichée pour le moulin source / cible
+  const fromStep = fromG ? grinderStep(fromG) : 1
+  const fromDecimals = fromG ? grinderDecimals(fromG) : 0
+  const fromMax = fromG?.clicks || fromG?.maxµm || 100
+  const fromMin = fromG?.unit === 'µm' ? fromG.minµm : (fromStep < 1 ? fromStep : 1)
 
   const brands = {}
   Object.entries(GRINDERS).forEach(([id, g]) => {
@@ -4320,18 +4358,24 @@ function TabComparateur({ T }) {
               {µmPerFrom && <span style={{fontSize:10,color:T.textMute,fontFamily:'monospace'}}>{µmPerFrom} µm/{fromG.unit}</span>}
             </div>
             <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <button onClick={() => setFromVal(v => Math.max(1, v-1))} style={btn}>−</button>
+              <button onClick={() => setFromVal(v => Math.max(fromMin, roundToStep(v - fromStep, fromStep)))} style={btn}>−</button>
               <input
-                type="number" value={fromVal} min={1} max={fromG.clicks||fromG.maxµm}
-                onChange={e => setFromVal(Math.max(1, Math.min(fromG.clicks||fromG.maxµm, parseInt(e.target.value)||1)))}
+                type="number" value={Number(fromVal).toFixed(fromDecimals)} min={fromMin} max={fromMax} step={fromStep}
+                onChange={e => {
+                  const parsed = parseFloat(e.target.value)
+                  if(isNaN(parsed)) return
+                  const clamped = Math.max(fromMin, Math.min(fromMax, parsed))
+                  setFromVal(roundToStep(clamped, fromStep))
+                }}
                 style={{flex:1,textAlign:'center',padding:'8px 0',background:T.bg3,border:`1px solid ${T.border2}`,borderRadius:6,fontSize:20,fontWeight:700,fontFamily:'monospace',color:T.gold,outline:'none'}}
               />
-              <button onClick={() => setFromVal(v => Math.min(fromG.clicks||fromG.maxµm, v+1))} style={btn}>+</button>
+              <button onClick={() => setFromVal(v => Math.min(fromMax, roundToStep(v + fromStep, fromStep)))} style={btn}>+</button>
             </div>
             {fromG.clicks && (
               <div style={{marginTop:10,display:'flex',justifyContent:'center'}}>
                 <div style={{fontFamily:'monospace',fontSize:13,color:T.textDim,background:T.bg3,padding:'6px 16px',borderRadius:20,border:`1px solid ${T.border}`}}>
                   ≈ <span style={{color:T.text,fontWeight:700}}>{sourceµm}</span> µm
+                  <span style={{color:T.textMute,marginLeft:8,fontSize:11}}>(pas {fromStep})</span>
                 </div>
               </div>
             )}
@@ -4356,10 +4400,22 @@ function TabComparateur({ T }) {
             {inRange ? (
               <div style={{background:`${T.green}15`,border:`1px solid ${T.green}44`,borderRadius:8,padding:'14px 16px',textAlign:'center'}}>
                 <div style={{fontSize:11,letterSpacing:'0.2em',textTransform:'uppercase',color:T.green,marginBottom:6}}>Réglage équivalent</div>
-                <div style={{fontFamily:'monospace',fontSize:42,fontWeight:900,color:T.green,lineHeight:1}}>{targetVal}</div>
+                <div style={{fontFamily:'monospace',fontSize:42,fontWeight:900,color:T.green,lineHeight:1}}>{fmtVal(targetVal, toG)}</div>
                 <div style={{fontSize:12,color:T.textDim,marginTop:4}}>{toG.unit}</div>
                 {toG.clicks && (
-                  <div style={{fontSize:11,color:T.textMute,marginTop:8,fontFamily:'monospace'}}>≈ {sourceµm} µm · sur {toG.clicks} {toG.unit}s max</div>
+                  <div style={{fontSize:11,color:T.textMute,marginTop:8,fontFamily:'monospace'}}>≈ {sourceµm} µm · sur {toG.clicks} {toG.unit}s max · pas {targetStep}</div>
+                )}
+                {toG.unit === 'rot' && targetVal != null && (
+                  <div style={{marginTop:6,fontSize:10,color:T.textMute,fontFamily:'monospace'}}>
+                    Notation 1Zpresso : {(() => {
+                      const totalClicks = Math.round(targetVal * 90)
+                      const rot = Math.floor(totalClicks / 90)
+                      const numTickRem = totalClicks - rot * 90
+                      const num = Math.floor(numTickRem / 10)
+                      const tick = numTickRem - num * 10
+                      return `${rot}.${num}.${tick}`
+                    })()} <span style={{color:T.textMute}}>(rot.numéro.tick)</span>
+                  </div>
                 )}
               </div>
             ) : (
