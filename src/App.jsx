@@ -1757,7 +1757,7 @@ function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose,
     {/* RESET CALIBRATION */}
     <div style={{marginTop:8,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
       {!resetConfirm
-        ?<button onClick={()=>{setResetConfirm(true);setTimeout(()=>setResetConfirm(false),3000)}} style={{width:'100%',padding:'11px 0',background:'transparent',border:`1px solid ${T.border}`,color:T.textMute,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.2em',touchAction:'manipulation'}}>↺ RESET CALIBRATION</button>
+        ?<button onClick={()=>{setResetConfirm(true);setTimeout(()=>setResetConfirm(false),3000)}} style={{width:'100%',padding:'11px 0',background:`${T.red}12`,border:`1px solid ${T.red}88`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.2em',fontWeight:600,touchAction:'manipulation'}}>↺ RESET CALIBRATION</button>
         :<div style={{display:'flex',gap:8}}>
           <button onClick={()=>setResetConfirm(false)} style={{flex:1,padding:'11px 0',background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',touchAction:'manipulation'}}>ANNULER</button>
           <button onClick={()=>{setFeedback(null);setFlash(null);setLiveWeight(0);setResetConfirm(false);onReset()}} style={{flex:1,padding:'11px 0',background:`${T.red}22`,border:`1px solid ${T.red}`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',fontWeight:700,touchAction:'manipulation'}}>CONFIRMER RESET</button>
@@ -3280,7 +3280,7 @@ function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, se
     {/* RESET CALIBRATION */}
     <div style={{marginTop:8,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
       {!resetConfirm
-        ?<button onClick={()=>{setResetConfirm(true);setTimeout(()=>setResetConfirm(false),3000)}} style={{width:'100%',padding:'11px 0',background:'transparent',border:`1px solid ${T.border}`,color:T.textMute,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.2em',touchAction:'manipulation'}}>↺ RESET CALIBRATION</button>
+        ?<button onClick={()=>{setResetConfirm(true);setTimeout(()=>setResetConfirm(false),3000)}} style={{width:'100%',padding:'11px 0',background:`${T.red}12`,border:`1px solid ${T.red}88`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.2em',fontWeight:600,touchAction:'manipulation'}}>↺ RESET CALIBRATION</button>
         :<div style={{display:'flex',gap:8}}>
           <button onClick={()=>setResetConfirm(false)} style={{flex:1,padding:'11px 0',background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',touchAction:'manipulation'}}>ANNULER</button>
           <button onClick={()=>{setFeedback(null);setFlash(null);setLiveWeight(0);setResetConfirm(false);onReset()}} style={{flex:1,padding:'11px 0',background:`${T.red}22`,border:`1px solid ${T.red}`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',fontWeight:700,touchAction:'manipulation'}}>CONFIRMER RESET</button>
