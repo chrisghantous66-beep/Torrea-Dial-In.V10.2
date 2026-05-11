@@ -1631,7 +1631,7 @@ function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose,
           <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'center',flexWrap:'wrap'}}>
             <button onClick={()=>setGrind(g2=>clamp(g2-25,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>−25µm</button>
             <button onClick={()=>setGrind(g2=>clamp(g2-5,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>−5µm</button>
-            <button onClick={()=>setGrind(m.grindBaseµm)} style={{...dBtn(T.text,T),border:`1px solid ${T.text}66`,background:`${T.text}12`}}>↺ {m.grindBaseµm}µm</button>
+            <button onClick={()=>setGrind(m.grindBaseµm)} style={{padding:'8px 14px',border:`2px solid ${T.text}`,background:`${T.text}20`,color:T.text,borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'monospace',fontWeight:700,touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>↺ {m.grindBaseµm}µm</button>
             <button onClick={()=>setGrind(g2=>clamp(g2+5,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>+5µm</button>
             <button onClick={()=>setGrind(g2=>clamp(g2+25,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>+25µm</button>
           </div>
