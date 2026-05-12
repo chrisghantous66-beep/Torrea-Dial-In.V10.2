@@ -25,7 +25,8 @@ const LIGHT = {
 // minµm/maxµm = plage totale · clicks = nb total réglages
 // espresso/filter/aeropress/chemex/moka = [minRéglage, maxRéglage] en unité native
 const GRINDERS = {
-  none: { label:'— Sélectionner un moulin —', brand:'', clicks:null, minµm:0, maxµm:1200 },
+  none:            { label:'— Sélectionner un moulin —', brand:'', clicks:null, minµm:0, maxµm:1200 },
+  generic_classic: { label:'Autre / classique', brand:'Générique', clicks:100, unit:'clic', minµm:200, maxµm:1200, espresso:[10,30], filter:[40,70], aeropress:[25,55], chemex:[50,75], moka:[15,35], description:'Tout moulin classique à clics · plage générique' },
 
   // ── Breville / Sage ── (sources : honestcoffeeguide, roastycoffee, manuel BCG820)
   breville_sgp:  { label:'Smart Grinder Pro',    brand:'Breville (Sage)', clicks:60,  unit:'réglage', minµm:200, maxµm:820,  espresso:[5,15],  filter:[25,50], aeropress:[22,38], chemex:[40,52], moka:[17,30], description:'60 réglages · 200–820µm · point central espresso ~12' },
@@ -1067,7 +1068,7 @@ function GrinderSelector({ grinderId, setGrinderId, method, grindValue, setGrind
   const range=g&&g[method]?g[method]:null
   const has=grinderId!=='none'
   const {favs,toggle:toggleFav,isFav}=useFavorites(FAV_GRINDERS_KEY)
-  const brands=['Breville (Sage)','Baratza','Mahlkönig','Eureka','Niche','Comandante','1Zpresso','Timemore','Fellow','Wilfa','Hario','Porlex','Kinu','Rancilio',"De'Longhi",'Weber','Lagom','Turin/DF','Mazzer','Capresso']
+  const brands=['Générique','Breville (Sage)','Baratza','Mahlkönig','Eureka','Niche','Comandante','1Zpresso','Timemore','Fellow','Wilfa','Hario','Porlex','Kinu','Rancilio',"De'Longhi",'Weber','Lagom','Turin/DF','Mazzer','Capresso']
   const favEntries=favs.map(id=>[id,GRINDERS[id]]).filter(([,v])=>v)
 
   return (
@@ -4931,6 +4932,11 @@ function WelcomeModal({ onClose, T }) {
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
   const { session, logout } = useAuth()
+  const [urlError] = useState(() => {
+    const e = new URLSearchParams(window.location.search).get('auth_error')
+    if (e) window.history.replaceState({}, '', window.location.pathname)
+    return e
+  })
   const [darkMode,setDarkMode]=useState(true)
   const T=darkMode?DARK:LIGHT
   const [showWelcome,setShowWelcome]=useState(true)
@@ -5033,7 +5039,6 @@ export default function App() {
   }
 
   // ── Garde d'authentification (après tous les hooks) ──
-  const urlError = new URLSearchParams(window.location.search).get('auth_error')
   if (session === undefined) return null
   if (!session) return <AuthScreen errorFromUrl={urlError} />
 
@@ -5058,7 +5063,7 @@ export default function App() {
               <span style={{fontSize:16}}>{darkMode?'🌙':'☀️'}</span>
               <span style={{fontWeight:600}}>{darkMode?'Light Mode':'Dark Mode'}</span>
             </button>
-            <button onClick={logout} style={{background:'none',border:'none',cursor:'pointer',color:T.textMute,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',padding:'2px 4px',touchAction:'manipulation'}}>
+            <button onClick={logout} style={{background:'none',border:`1px solid ${T.border}`,borderRadius:12,cursor:'pointer',color:T.textDim,fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',padding:'4px 10px',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>
               Déconnexion
             </button>
           </div>

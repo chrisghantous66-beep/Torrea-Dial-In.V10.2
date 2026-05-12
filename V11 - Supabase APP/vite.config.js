@@ -9,7 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: []
+        runtimeCaching: [],
+        navigateFallbackDenylist: [/^\/api\//, /^\/auth\//],
       },
       manifest: {
         name: 'Torrea Dial-In',

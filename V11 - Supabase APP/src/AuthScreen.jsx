@@ -27,7 +27,7 @@ export default function AuthScreen({ errorFromUrl }) {
 
     const params = new URLSearchParams({
       client_id:     import.meta.env.VITE_WP_CLIENT_ID,
-      redirect_uri:  `${window.location.origin}/api/auth/callback`,
+      redirect_uri:  `${window.location.origin}/auth/callback`,
       response_type: 'code',
       scope:         'basic',
       state,

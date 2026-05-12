@@ -8,7 +8,13 @@ const supabaseAdmin = createClient(
 
 export default async function handler(req, res) {
   const { code, error: oauthError } = req.query
-  const appUrl = process.env.APP_URL
+
+  // Derive appUrl from the request itself so it always matches the registered redirect_uri
+  const proto = req.headers['x-forwarded-proto'] || 'https'
+  const host  = req.headers['x-forwarded-host'] || req.headers.host
+  const appUrl = `${proto}://${host}`
+
+  console.log('[callback] invoked — code:', !!code, '| appUrl:', appUrl)
 
   if (oauthError) {
     return res.redirect(`${appUrl}?auth_error=${encodeURIComponent(oauthError)}`)
@@ -28,7 +34,7 @@ export default async function handler(req, res) {
         code,
         client_id:     process.env.WP_CLIENT_ID,
         client_secret: process.env.WP_CLIENT_SECRET,
-        redirect_uri:  `${appUrl}/api/auth/callback`,
+        redirect_uri:  `${appUrl}/auth/callback`,
       }),
     })
 
