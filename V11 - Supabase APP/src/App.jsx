@@ -1,0 +1,5092 @@
+import { useState, useEffect, useRef } from 'react'
+import { METHODS, RECIPES, BADGE_COLORS } from './recipes.js'
+
+// ─── THÈMES ───────────────────────────────────────────────────────────────────
+const DARK = {
+  bg:'#0f0f12', bg2:'#16161c', bg3:'#1e1e28', bg4:'#252535',
+  border:'#2e2e3e', border2:'#3a3a50',
+  text:'#e0e0f0', textDim:'#9090b8', textMute:'#52526e',
+  gold:'#d4b06a', blue:'#6ab4d4', green:'#7acca0',
+  red:'#d47a7a', orange:'#d4a06a', purple:'#a88ad4',
+  inputBg:'#0a0a0e', shadow:'rgba(0,0,0,0.4)',
+}
+const LIGHT = {
+  bg:'#f4f4f8', bg2:'#ffffff', bg3:'#eaeaf2', bg4:'#dddded',
+  border:'#c8c8de', border2:'#b0b0cc',
+  text:'#1a1a2e', textDim:'#44446a', textMute:'#8888aa',
+  gold:'#9a6e20', blue:'#2a7aaa', green:'#2a8a60',
+  red:'#aa3a3a', orange:'#9a6020', purple:'#6a4aaa',
+  inputBg:'#f8f8ff', shadow:'rgba(0,0,0,0.12)',
+}
+
+// ─── MOULINS ──────────────────────────────────────────────────────────────────
+// minµm/maxµm = plage totale · clicks = nb total réglages
+// espresso/filter/aeropress/chemex/moka = [minRéglage, maxRéglage] en unité native
+const GRINDERS = {
+  none: { label:'— Sélectionner un moulin —', brand:'', clicks:null, minµm:0, maxµm:1200 },
+
+  // ── Breville / Sage ── (sources : honestcoffeeguide, roastycoffee, manuel BCG820)
+  breville_sgp:  { label:'Smart Grinder Pro',    brand:'Breville (Sage)', clicks:60,  unit:'réglage', minµm:200, maxµm:820,  espresso:[5,15],  filter:[25,50], aeropress:[22,38], chemex:[40,52], moka:[17,30], description:'60 réglages · 200–820µm · point central espresso ~12' },
+  breville_dcp:  { label:'Dose Control Pro',      brand:'Breville (Sage)', clicks:40,  unit:'réglage', minµm:200, maxµm:820,  espresso:[3,10],  filter:[16,33], aeropress:[14,25],  chemex:[26,35], moka:[11,20], description:'40 réglages · 200–820µm' },
+
+  // ── Baratza ──
+  baratza_encore:      { label:'Encore',          brand:'Baratza', clicks:40,  unit:'clic',    minµm:250, maxµm:1150, espresso:[5,12],  filter:[18,28], aeropress:[10,22], chemex:[20,30], moka:[8,14],  description:'40 réglages · 250–1150µm' },
+  baratza_encore_esp:  { label:'Encore ESP',      brand:'Baratza', clicks:40,  unit:'clic',    minµm:200, maxµm:1150, espresso:[2,12],  filter:[16,28], aeropress:[8,22],  chemex:[18,30], moka:[6,14],  description:'40 réglages · 200–1150µm' },
+  baratza_virtuoso:    { label:'Virtuoso+',        brand:'Baratza', clicks:40,  unit:'clic',    minµm:250, maxµm:1100, espresso:[5,12],  filter:[18,28], aeropress:[10,22], chemex:[20,28], moka:[8,14],  description:'40 réglages · 250–1100µm' },
+  baratza_vario:       { label:'Vario / Vario+',  brand:'Baratza', clicks:230, unit:'clic',    minµm:200, maxµm:1300, step:1, espresso:[40,80], filter:[100,180],aeropress:[60,140],chemex:[120,200],moka:[50,90], description:'230 réglages · 200–1300µm' },
+  baratza_sette270:    { label:'Sette 270',        brand:'Baratza', clicks:270, unit:'réglage', minµm:200, maxµm:700,  step:1, espresso:[1,60],  filter:[120,200],aeropress:[60,150],chemex:[140,220],moka:[30,80], description:'270 micro-réglages · espresso' },
+
+  // ── Mahlkönig ──
+  mahlkonig_e65s: { label:'E65S',  brand:'Mahlkönig', clicks:null, unit:'µm', minµm:100, maxµm:1200, espresso:[200,400], filter:[500,900], aeropress:[350,700], chemex:[600,900],  moka:[300,500], description:'Affichage µm direct · professionnel' },
+  mahlkonig_x54:  { label:'X54',   brand:'Mahlkönig', clicks:null, unit:'µm', minµm:150, maxµm:1100, espresso:[200,400], filter:[500,850], aeropress:[350,700], chemex:[600,900],  moka:[280,480], description:'Affichage µm · domestic haut de gamme' },
+  mahlkonig_ek43: { label:'EK43',  brand:'Mahlkönig', clicks:10,   unit:'numéro', minµm:200, maxµm:1400, espresso:[1,3],   filter:[6,9],    aeropress:[4,7],     chemex:[7,9],     moka:[2,4],   description:'Référence filtre/single dose 0–10' },
+
+  // ── Eureka ── (sources : honestcoffeeguide, Clive Coffee tech tips, ~25µm/pas, 8 numéros/rotation)
+  eureka_specialita: { label:'Mignon Specialità', brand:'Eureka', clicks:null, unit:'µm', minµm:195, maxµm:1100, espresso:[195,290], filter:[400,600], aeropress:[320,560], chemex:[520,700], moka:[260,400], description:'Stepless ~25µm/pas · réglage rotation+nombre' },
+  eureka_silenzio:   { label:'Mignon Silenzio',   brand:'Eureka', clicks:null, unit:'µm', minµm:195, maxµm:1100, espresso:[195,290], filter:[400,600], aeropress:[320,560], chemex:[520,700], moka:[260,400], description:'Version silencieuse · même gamme Specialita' },
+
+  // ── Niche ──
+  niche_zero: { label:'Zero', brand:'Niche', clicks:50, unit:'numéro', minµm:200, maxµm:1100, espresso:[15,22], filter:[30,45], aeropress:[22,38], chemex:[35,48], moka:[18,26], description:'50 numéros · single-dose de référence' },
+  niche_duo:  { label:'Duo',  brand:'Niche', clicks:50, unit:'numéro', minµm:200, maxµm:1100, espresso:[15,22], filter:[30,45], aeropress:[22,38], chemex:[35,48], moka:[18,26], description:'50 numéros · double sortie' },
+
+  // ── Comandante ── (sources : honestcoffeeguide, basicbarista, completehomebarista — 2026)
+  comandante_c40:      { label:'C40 MK4',                 brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, step:0.5, espresso:[7,15],  filter:[18,30], aeropress:[15,22], chemex:[28,36], moka:[14,22], description:'~30µm/clic · 0–1200µm · référence manuel' },
+  comandante_c40_red:  { label:'C40 MK4 (Red Clix)',      brand:'Comandante', clicks:80, unit:'clic', minµm:0,   maxµm:1200, step:0.5, espresso:[14,30], filter:[36,60], aeropress:[30,44], chemex:[56,72], moka:[28,44], description:'Red Clix ~15µm/clic · résolution doublée' },
+  comandante_c60:      { label:'C60 Baracuda',            brand:'Comandante', clicks:40, unit:'clic', minµm:0,   maxµm:1200, step:0.5, espresso:[6,13],  filter:[16,26], aeropress:[13,23], chemex:[23,30], moka:[12,20], description:'60mm burrs · plus rapide que C40' },
+
+  // ── 1Zpresso ── (specs officielles 1zpresso.coffee/grind-setting · vérifié 2026)
+  // Format réglage : 'rot' = nombre de rotations depuis zéro (décimal supporté, ex: 1.4.4 = 1.49 rot)
+  zpresso_jmax:    { label:'J-Max',       brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:0,   maxµm:1190, step:0.1, decimals:1, espresso:[1.0,1.7], filter:[2.6,3.2], aeropress:[1.8,2.6], chemex:[3.0,3.6], moka:[1.6,2.4], description:'External · 90 clics/rot · 8,8µm/clic · 0–1190µm · 4,5 rot max' },
+  zpresso_jxpro:   { label:'JX-Pro S',    brand:'1Zpresso', clicks:4.8, unit:'rot', minµm:0,   maxµm:915,  step:0.1, decimals:1, espresso:[0.8,1.5], filter:[2.4,3.4], aeropress:[1.8,2.8], chemex:[3.0,3.8], moka:[1.5,2.5], description:'Top · 40 clics/rot · 12,5µm/clic · 0–915µm · 4,8 rot max' },
+  zpresso_kmax:    { label:'K-Max',       brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:0,   maxµm:1400, step:0.1, decimals:1, espresso:[0.6,1.1], filter:[1.6,2.6], aeropress:[1.1,2.0], chemex:[2.2,2.9], moka:[0.9,1.5], description:'External · 90 clics/rot · 22µm/clic · 0–1400µm · K-series filter-friendly' },
+  zpresso_zp6:     { label:'ZP6 Special', brand:'1Zpresso', clicks:4.5, unit:'rot', minµm:0,   maxµm:1400, step:0.1, decimals:1, espresso:[0.6,1.1], filter:[1.6,2.6], aeropress:[1.1,2.0], chemex:[2.2,2.9], moka:[0.9,1.5], description:'External · 90 clics/rot · 22µm/clic · burrs brewing-spec' },
+
+  // ── Timemore ──
+  timemore_c2:     { label:'C2',       brand:'Timemore', clicks:20, unit:'clic', minµm:250, maxµm:1000, espresso:[8,15],  filter:[14,22], aeropress:[10,18], chemex:[16,24], moka:[9,14],  description:'20 clics/tour · rapport qualité/prix' },
+  timemore_c3pro:  { label:'C3 Pro',   brand:'Timemore', clicks:20, unit:'clic', minµm:200, maxµm:1000, espresso:[7,14],  filter:[13,21], aeropress:[9,17],  chemex:[15,22], moka:[8,13],  description:'20 clics/tour · burrs améliorés' },
+  timemore_slim6:  { label:'Slim 6',   brand:'Timemore', clicks:60, unit:'clic', minµm:200, maxµm:900,  espresso:[6,12],  filter:[18,30], aeropress:[10,22], chemex:[20,32], moka:[7,14],  description:'60 réglages · compact voyage' },
+
+  // ── Fellow ──
+  fellow_ode2:  { label:'Ode Gen 2',  brand:'Fellow', clicks:110, unit:'réglage', minµm:350, maxµm:1100, step:1, espresso:[2,10],  filter:[40,80], aeropress:[20,60],  chemex:[55,90], moka:[15,35], description:'11 macro × 10 micro · optimisé filter' },
+  fellow_opus:  { label:'Opus',       brand:'Fellow', clicks:110, unit:'réglage', minµm:200, maxµm:1100, step:1, espresso:[2,18],  filter:[50,90], aeropress:[20,65],  chemex:[60,95], moka:[10,30], description:'110 réglages · espresso + filter' },
+
+  // ── Wilfa ──
+  wilfa_svart: { label:'Svart Aroma',  brand:'Wilfa', clicks:6, unit:'position', minµm:300, maxµm:1000, espresso:[1,2], filter:[3,5], aeropress:[2,4], chemex:[4,6], moka:[1,3], description:'6 positions · simple et efficace' },
+
+  // ── Hario ──
+  hario_skerton: { label:'Skerton Pro', brand:'Hario', clicks:null, unit:'tours',  minµm:200, maxµm:900, espresso:[0.5,2], filter:[3,5], aeropress:[2,4], chemex:[4,6], moka:[1,3], description:'Manuel · nb de tours depuis serré' },
+
+  // ── Porlex ──
+  porlex_mini2: { label:'Mini II',  brand:'Porlex', clicks:15, unit:'clic', minµm:250, maxµm:850, espresso:[4,8],  filter:[9,13], aeropress:[6,11], chemex:[10,14], moka:[5,9], description:'15 clics · ultra compact voyage' },
+
+  // ── Kinu ──
+  kinu_m47: { label:'M47 Phoenix/Classic', brand:'Kinu', clicks:null, unit:'µm', minµm:150, maxµm:1000, espresso:[150,280], filter:[450,800], aeropress:[300,650], chemex:[550,800], moka:[200,380], description:'Affichage µm · ingénierie allemande' },
+
+  // ── Rancilio ──
+  rancilio_rocky: { label:'Rocky', brand:'Rancilio', clicks:55, unit:'réglage', minµm:180, maxµm:1100, espresso:[10,20], filter:[30,45], aeropress:[18,35], chemex:[32,48], moka:[12,22], description:'55 réglages · robuste semi-pro' },
+
+  // ── De\'Longhi ──
+  delonghi_kg79: { label:'KG79 / KG89',  brand:"De'Longhi", clicks:18, unit:'réglage', minµm:200, maxµm:1000, espresso:[1,4],  filter:[8,14], aeropress:[5,12],  chemex:[10,16], moka:[3,7],  description:'18 réglages · entrée de gamme' },
+
+  // ── Weber ──
+  weber_key: { label:'Key', brand:'Weber', clicks:null, unit:'µm', minµm:200, maxµm:1000, espresso:[200,300], filter:[450,750], aeropress:[300,650], chemex:[550,750], moka:[250,420], description:'Précision µm · single dose premium' },
+
+  // ── Lagom ──
+  lagom_p64: { label:'P64', brand:'Lagom', clicks:11, unit:'numéro', minµm:200, maxµm:1200, espresso:[0,2], filter:[5,9], aeropress:[3,7], chemex:[6,10], moka:[1,3], description:'Numéros 0–11 · burrs 64mm' },
+
+  // ── DF64 ──
+  df64: { label:'DF64 (Turin)', brand:'Turin/DF', clicks:11, unit:'numéro', minµm:150, maxµm:800, espresso:[2,4], filter:[7,10], aeropress:[4,8], chemex:[8,11], moka:[3,5], description:'Single-dose 64mm burrs' },
+
+  // ── Mazzer ──
+  mazzer_mini: { label:'Mini E (Type A)', brand:'Mazzer', clicks:null, unit:'numéro', minµm:150, maxµm:700, espresso:[150,280], filter:[400,650], aeropress:[300,550], chemex:[450,650], moka:[200,350], description:'Professionnel · semi-com.' },
+
+  // ── Capresso ──
+  capresso_infinity: { label:'Infinity Plus', brand:'Capresso', clicks:20, unit:'réglage', minµm:200, maxµm:1000, espresso:[1,4], filter:[8,16], aeropress:[5,13], chemex:[10,18], moka:[3,7], description:'20 réglages · conique acier' },
+}
+
+// ─── MACHINES ESPRESSO ────────────────────────────────────────────────────────
+// piType : 'none' | 'fixed' | 'programmable' | 'lever'
+// fixedPI : valeurs constructeur indicatives pour piType='fixed' (sec, pct)
+const MACHINES = {
+  // ── Sans pre-infusion ──
+  gaggia_classic:   { label:'Classic Pro',                 brand:'Gaggia',         piType:'none',         description:'Single boiler · pas de pre-infusion' },
+  rancilio_silvia:  { label:'Silvia',                      brand:'Rancilio',       piType:'none',         description:'Single boiler · pas de pre-infusion' },
+  delonghi_dedica:  { label:'Dedica / EC685',              brand:"De'Longhi",      piType:'none',         description:'Compact · pas de pre-infusion' },
+  classic_other:    { label:'Autre / classique',           brand:'Générique',      piType:'none',         description:'Toute machine sans pre-infusion' },
+
+  // ── Pre-Infusion fixe ──
+  breville_bambino: { label:'Bambino / Bambino Plus',      brand:'Breville (Sage)', piType:'fixed',        fixedPI:{sec:9,pct:65}, description:'Pre-Infusion fixe ~9s à basse pression' },
+  breville_express: { label:'Barista Express / Pro / Touch',brand:'Breville (Sage)', piType:'fixed',       fixedPI:{sec:7,pct:70}, description:'Pre-Infusion fixe ~7s' },
+  lm_micra:         { label:'Linea Micra',                  brand:'La Marzocco',    piType:'fixed',        fixedPI:{sec:4,pct:60}, description:'Flow restrictor · PI courte basse pression' },
+
+  // ── Pre-Infusion programmable ──
+  breville_dual:    { label:'Dual Boiler',                 brand:'Breville (Sage)', piType:'programmable', description:'Pre-Infusion réglable (durée + pression)' },
+  sage_oracle:      { label:'Oracle / Oracle Touch',       brand:'Breville (Sage)', piType:'programmable', description:'Pre-Infusion réglable' },
+  lelit_bianca:     { label:'Bianca',                      brand:'Lelit',           piType:'programmable', description:'Paddle flow · pre-infusion réglable' },
+
+  // ── Levier / manuelle ──
+  pavoni_euro:      { label:'Europiccola',                 brand:'La Pavoni',       piType:'lever',        description:'Levier manuel · pre-infusion à la main' },
+  flair_58:         { label:'Flair 58',                    brand:'Flair',           piType:'lever',        description:'Pression manuelle · pre-infusion à la main' },
+  cafelat_robot:    { label:'Robot',                       brand:'Cafelat',         piType:'lever',        description:'Levier manuel · pre-infusion à la main' },
+}
+const MACHINE_CATEGORIES = [
+  { piType:'none',         label:'Sans pre-infusion' },
+  { piType:'fixed',        label:'Pre-Infusion fixe' },
+  { piType:'programmable', label:'Pre-Infusion programmable' },
+  { piType:'lever',        label:'Levier / manuelle' },
+]
+function getMachine(id){ return MACHINES[id] || MACHINES.gaggia_classic }
+function migrateMachineId(stored){
+  if (stored === 'breville') return 'breville_dual'
+  if (stored === 'classic')  return 'gaggia_classic'
+  return stored && MACHINES[stored] ? stored : 'gaggia_classic'
+}
+
+// ─── MÉTHODES ─────────────────────────────────────────────────────────────────
+const BREW_METHODS = {
+  espresso:  { label:'Espresso',  icon:'☕', targetRatioMin:1.5, targetRatioMax:2.5,  targetTimeMin:20,  targetTimeMax:35,  grindBaseµm:200, grindRangeµm:[150,380],  description:'1:2 · 20–35s' },
+  filter:    { label:'Filtre',    icon:'▽', targetRatioMin:14,  targetRatioMax:18,   targetTimeMin:180, targetTimeMax:300, grindBaseµm:700, grindRangeµm:[300,900],  description:'1:15 · 3–5min' },
+  aeropress: { label:'AeroPress', icon:'⬡', targetRatioMin:6,   targetRatioMax:12,   targetTimeMin:60,  targetTimeMax:150, grindBaseµm:500, grindRangeµm:[320,960],  description:'1:8 · 1–2.5min' },
+  chemex:    { label:'Chemex',    icon:'◇', targetRatioMin:15,  targetRatioMax:17,   targetTimeMin:210, targetTimeMax:360, grindBaseµm:800, grindRangeµm:[600,1000], description:'1:16 · 3.5–6min' },
+  moka:      { label:'Moka',      icon:'◈', targetRatioMin:6,   targetRatioMax:8,    targetTimeMin:180, targetTimeMax:300, grindBaseµm:400, grindRangeµm:[360,660],  description:'1:7 · 3–5min' },
+}
+
+const MC = '#6ab4d4'
+const STORAGE_KEY = 'torrea_v3'
+const COFFEE_LIB_KEY = 'torrea_coffees'
+const PARAMS_KEY = 'torrea_params_v1'
+const SAVED_RECIPES_KEY = 'torrea_saved_recipes_v1'
+
+const FAV_GRINDERS_KEY = 'torrea_fav_grinders_v1'
+const FAV_MACHINES_KEY = 'torrea_fav_machines_v1'
+function loadSavedParams() {
+  try { return JSON.parse(localStorage.getItem(PARAMS_KEY)||'{}') } catch { return {} }
+}
+function useFavorites(storageKey) {
+  const [favs,setFavs]=useState(()=>{try{const s=localStorage.getItem(storageKey);return s?JSON.parse(s):[]}catch{return[]}})
+  useEffect(()=>{try{localStorage.setItem(storageKey,JSON.stringify(favs))}catch{}},[favs,storageKey])
+  const toggle=(id)=>setFavs(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])
+  const isFav=(id)=>favs.includes(id)
+  return {favs,toggle,isFav}
+}
+
+// ─── CATALOGUE TORREA ─────────────────────────────────────────────────────────
+const COFFEE_CATALOG = [
+  { name:'Capucas',  country:'Honduras',  variety:'', profile:'Chocolat, caramel, réglisse — gourmand et puissant', process:'Lavé', notes:'Riche, longue persistance · 1300–1800m · idéal espresso' },
+  { name:'El Palomar', country:'Pérou',   variety:'', profile:'Fruits secs, agrumes — doux et raffiné',             process:'Lavé', notes:'Acidité légère · finale douce · 1400–1900m' },
+  { name:'El Triunfo', country:'Mexique', variety:'', profile:'Chocolat — rond et gourmand',                        process:'Lavé', notes:'Équilibré et puissant · 1200–1600m · crowd pleaser' },
+  { name:'Palanda',  country:'Équateur',  variety:'', profile:'Chocolat, caramel, miel, malt — doux et sucré',      process:'Naturel', notes:'Très gourmand, peu d\'acidité · forêt nuageuse' },
+  { name:'Kitché',   country:'Guatemala', variety:'', profile:'Fruits secs, agrumes, floral — complexe et équilibré',process:'Lavé', notes:'Corps intense · 1000–1500m' },
+  { name:'Salomon',  country:'Éthiopie',  variety:'Heirloom', profile:'Caramel, chocolat noir, citron, pêche — fin et expressif', process:'Lavé', notes:'84 SCA · acidité vive · 1900–2200m' },
+]
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)) }
+function r2(v) { return Math.round(v * 100) / 100 }
+function formatTime(s) {
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s/60), r = s%60
+  return r > 0 ? `${m}m${String(r).padStart(2,'0')}s` : `${m}min`
+}
+
+// ─── FRAÎCHEUR DU CAFÉ ────────────────────────────────────────────────────────
+// Repères classiques (Hoffmann/SCA) : dégazage 3-7j, fenêtre optimale 7-21j,
+// déclin progressif après ~45j, stale après 90j en sachet ouvert.
+function daysSinceRoast(roastDate) {
+  if(!roastDate) return null
+  const d=new Date(roastDate); if(isNaN(d.getTime())) return null
+  const diff=Date.now()-d.getTime()
+  return Math.floor(diff/86400000)
+}
+function freshnessState(days, T) {
+  if(days===null||days===undefined) return null
+  if(days<0)  return { label:'Date future ?',          color:T.textMute, icon:'?' }
+  if(days<=3) return { label:`Trop frais (${days}j) — dégazage`, color:T.orange, icon:'⏳' }
+  if(days<=21)return { label:`Optimal (${days}j)`,     color:T.green,  icon:'✓' }
+  if(days<=45)return { label:`Bon (${days}j)`,          color:T.gold,   icon:'•' }
+  if(days<=90)return { label:`Vieillissant (${days}j)`, color:T.orange, icon:'!' }
+  return        { label:`Stale (${days}j)`,             color:T.red,    icon:'✕' }
+}
+
+// ─── ARÔMES ───────────────────────────────────────────────────────────────────
+// Roue aromatique simplifiée (15 descripteurs)
+const AROMAS = [
+  'Chocolat','Caramel','Noisette','Vanille',
+  'Fruits rouges','Agrumes','Fruits jaunes','Fruits secs',
+  'Floral','Miel','Épicé','Boisé',
+  'Tabac','Malt','Vert/herbacé',
+]
+
+// ─── PARTAGE / EXPORT ─────────────────────────────────────────────────────────
+function encB64(s){
+  try{return btoa(String.fromCharCode(...new TextEncoder().encode(s)))}catch{return ''}
+}
+function decB64(s){
+  try{return new TextDecoder().decode(Uint8Array.from(atob(s),c=>c.charCodeAt(0)))}catch{return ''}
+}
+// Encode minimal recipe payload (clés courtes pour QR plus dense)
+function encodeRecipe(e){
+  const p={
+    m:e.mode, d:e.dose, y:e.yld, t:e.time, te:e.temp,
+    pp:e.preInfPct, ps:e.preInfSec, mi:e.machineId,
+    me:e.method, gr:e.grind, gi:e.grinderId,
+    ta:e.taste, sc:e.score, no:e.notes,
+    co:e.coffee?{n:e.coffee.name,c:e.coffee.country,v:e.coffee.variety,pr:e.coffee.process,pf:e.coffee.profile,r:e.coffee.roastDate}:undefined,
+  }
+  Object.keys(p).forEach(k=>p[k]===undefined&&delete p[k])
+  return encB64(JSON.stringify(p))
+}
+function decodeRecipe(s){
+  const j=decB64(s); if(!j)return null
+  try{
+    const p=JSON.parse(j)
+    return {
+      mode:p.m, dose:p.d, yld:p.y, time:p.t, temp:p.te,
+      preInfPct:p.pp, preInfSec:p.ps, machineId:p.mi,
+      method:p.me, grind:p.gr, grinderId:p.gi,
+      taste:p.ta, score:p.sc, notes:p.no,
+      coffee:p.co?{name:p.co.n||'',country:p.co.c||'',variety:p.co.v||'',process:p.co.pr||'',profile:p.co.pf||'',roastDate:p.co.r||''}:undefined,
+    }
+  }catch{return null}
+}
+function recipeShareUrl(e){
+  const base=typeof window!=='undefined'?window.location.origin+window.location.pathname:''
+  return `${base}?r=${encodeRecipe(e)}`
+}
+
+// ─── ANALYTICS HELPERS ────────────────────────────────────────────────────────
+function analyzeHistory(history){
+  if(!history.length) return null
+  const total=history.length
+  const withScore=history.filter(h=>typeof h.score==='number')
+  const avgScore=withScore.length?Math.round(withScore.reduce((a,h)=>a+h.score,0)/withScore.length):0
+  const perfect=history.filter(h=>h.taste==='perfect').length
+  const perfectPct=Math.round(perfect/total*100)
+  const byMode={moulin:0,machine:0}
+  const byMethod={}
+  const byCoffee={}
+  history.forEach(h=>{
+    byMode[h.mode]=(byMode[h.mode]||0)+1
+    if(h.method)byMethod[h.method]=(byMethod[h.method]||0)+1
+    const cn=h.coffee?.name?.trim()
+    if(cn){
+      const c=byCoffee[cn]||{count:0,bestScore:0,bestEntry:null,grinds:{}}
+      c.count++
+      if((h.score||0)>c.bestScore){c.bestScore=h.score||0;c.bestEntry=h}
+      if(h.grind){c.grinds[h.grind]=(c.grinds[h.grind]||0)+1}
+      byCoffee[cn]=c
+    }
+  })
+  // Series par ordre chronologique (du plus ancien au plus récent)
+  const series=withScore.slice().reverse().map((h,i)=>({i,score:h.score,mode:h.mode,id:h.id}))
+  return { total, avgScore, perfect, perfectPct, byMode, byMethod, byCoffee, series }
+}
+
+// Convert µm value to native grinder setting
+function µmToSetting(µm, g) {
+  if (!g || g.label === '— Sélectionner un moulin —' || !g.clicks || g.minµm == null) return null
+  const pct = (µm - g.minµm) / (g.maxµm - g.minµm)
+  const raw = pct * g.clicks
+  // Précision : utilise g.decimals si défini, sinon comportement par défaut (1 déc pour rot, entier sinon)
+  const decimals = g.decimals != null ? g.decimals : (g.unit === 'rot' ? 1 : 0)
+  const factor = Math.pow(10, decimals)
+  const min = decimals > 0 ? Math.pow(10, -decimals) : 1
+  return Math.max(min, Math.round(raw * factor) / factor)
+}
+
+// ─── ALGORITHMES ──────────────────────────────────────────────────────────────
+// Ajustements progressifs : 1 clic (faible écart) · 2 clics (écart modéré) · 3 clics (grand écart)
+function devToClicks(dev) { return dev < 0.25 ? 1 : dev < 0.65 ? 2 : 3 }
+
+function computeDialIn({ method, doseG, yieldG, extractionTimeSec, currentGrindµm }) {
+  const m = BREW_METHODS[method]
+  if (!m || !doseG || !yieldG || !extractionTimeSec) return null
+  const ratio = yieldG / doseG
+  const rS = ratio<m.targetRatioMin ? ratio/m.targetRatioMin : ratio>m.targetRatioMax ? m.targetRatioMax/ratio : 1
+  const tS = extractionTimeSec<m.targetTimeMin ? extractionTimeSec/m.targetTimeMin : extractionTimeSec>m.targetTimeMax ? m.targetTimeMax/extractionTimeSec : 1
+  const score = Math.round((rS*0.45+tS*0.55)*100)
+  let delta=0, dir=null, reasons=[]
+  const fast=extractionTimeSec<m.targetTimeMin, slow=extractionTimeSec>m.targetTimeMax
+  const ratioHigh=ratio>m.targetRatioMax, ratioLow=ratio<m.targetRatioMin
+  const ratioRange=m.targetRatioMax-m.targetRatioMin
+  // Priorité : ratio → temps (ne jamais décider uniquement sur le temps)
+  // Amplitude : toujours 1–3 clics (5–15µm) par itération
+  if (ratioHigh) {
+    // Cas 1 : ratio trop élevé → café coule trop vite → moudre plus fin
+    const clicks=devToClicks((ratio-m.targetRatioMax)/ratioRange)
+    delta=-(clicks*5)
+    dir='finer'
+    reasons.push(fast
+      ? `Extraction trop ouverte (ratio 1:${ratio.toFixed(1)}) et trop rapide (${formatTime(extractionTimeSec)}) — mouture trop grossière`
+      : slow
+        ? `Extraction trop ouverte (ratio 1:${ratio.toFixed(1)}) malgré un temps long (${formatTime(extractionTimeSec)}) — vérifier la recette`
+        : `Extraction trop ouverte — ratio 1:${ratio.toFixed(1)} >> cible 1:${m.targetRatioMax}, café s'écoule trop librement`)
+  } else if (ratioLow) {
+    // Cas 4 : ratio trop faible → extraction trop restrictive → moudre plus grossier
+    const clicks=devToClicks((m.targetRatioMin-ratio)/ratioRange)
+    delta=clicks*5
+    dir='coarser'
+    reasons.push(slow
+      ? `Ratio insuffisant (1:${ratio.toFixed(1)}) et trop lent (${formatTime(extractionTimeSec)}) — mouture trop fine`
+      : fast
+        ? `Ratio insuffisant (1:${ratio.toFixed(1)}) malgré un temps court (${formatTime(extractionTimeSec)}) — vérifier la recette`
+        : `Extraction trop restrictive — ratio 1:${ratio.toFixed(1)} << cible 1:${m.targetRatioMin}`)
+  } else if (fast) {
+    // Cas 2 : ratio OK mais trop rapide → sous-extraction → plus fin
+    const clicks=devToClicks((m.targetTimeMin-extractionTimeSec)/m.targetTimeMin)
+    delta=-(clicks*5)
+    dir='finer'
+    reasons.push(`Sous-extraction — ratio correct mais trop rapide (${formatTime(extractionTimeSec)})`)
+  } else if (slow) {
+    // Cas 3 : ratio OK mais trop lent → sur-extraction → plus grossier
+    const clicks=devToClicks((extractionTimeSec-m.targetTimeMax)/m.targetTimeMax)
+    delta=clicks*5
+    dir='coarser'
+    reasons.push(`Sur-extraction — ratio correct mais trop lent (${formatTime(extractionTimeSec)})`)
+  }
+  const ng = clamp(Math.round((currentGrindµm+delta)/5)*5, m.grindRangeµm[0], m.grindRangeµm[1])
+  return { score, ratioScore:Math.round(rS*100), timeScore:Math.round(tS*100), ratio, grindDelta:ng-currentGrindµm, newGrind:ng, dir, steps:Math.round(Math.abs(delta)/5), reasons, isPerfect:score>=90 }
+}
+
+function computeTasteGrind({ taste, method, doseG, yieldG, currentGrindµm }, T) {
+  const m = BREW_METHODS[method]; if (!m) return null
+  if (taste==='perfect') return { taste, delta:0, newGrind:currentGrindµm, newYield:yieldG, detail:[], color:T.green, message:'✓ RECETTE SAUVEGARDÉE', steps:0 }
+  const ratio=yieldG/doseG; let delta=0, newYield=yieldG, detail=[]
+  if (taste==='acid') {
+    delta = -(15+Math.round(Math.max(0,m.targetRatioMin-ratio)*8))
+    detail.push('Mouture plus fine → extraction accrue')
+    if (ratio>=m.targetRatioMin&&ratio<=m.targetRatioMax) { newYield=Math.max(Math.round(doseG*m.targetRatioMin),yieldG-Math.round(doseG*0.3)); if(newYield!==yieldG)detail.push(`Rendement → ${newYield}g`) }
+  } else {
+    delta = +(15+Math.round(Math.max(0,ratio-m.targetRatioMax)*8))
+    detail.push('Mouture plus grossière → extraction réduite')
+    if (ratio>=m.targetRatioMin&&ratio<=m.targetRatioMax) { newYield=Math.min(Math.round(doseG*m.targetRatioMax),yieldG+Math.round(doseG*0.3)); if(newYield!==yieldG)detail.push(`Rendement → ${newYield}g`) }
+  }
+  const ng = clamp(Math.round((currentGrindµm+delta)/5)*5, m.grindRangeµm[0], m.grindRangeµm[1])
+  const actual = ng-currentGrindµm
+  return { taste, delta:actual, newGrind:ng, newYield, detail, color:taste==='acid'?T.blue:T.orange, message:taste==='acid'?`← PLUS FIN · ${ng}µm`:`→ PLUS GROSSIER · ${ng}µm`, steps:Math.round(Math.abs(actual)/5) }
+}
+
+function computeMachineDialIn({ doseG, yieldG, timeSec, tempC, preInfPct, preInfSec, piType='none' }) {
+  if (!doseG||!yieldG||!timeSec) return null
+  const ratio=yieldG/doseG
+  const rS=ratio<1.5?ratio/1.5:ratio>2.5?2.5/ratio:1
+  const tS=timeSec<20?timeSec/20:timeSec>35?35/timeSec:1
+  const tmpS=tempC<90?tempC/90:tempC>96?96/tempC:1
+  const score=Math.round((rS*0.35+tS*0.4+tmpS*0.25)*100)
+  const canTunePI = piType === 'programmable'
+  let suggestions=[], newTemp=tempC, newPreInfSec=preInfSec, newPreInfPct=preInfPct
+  if (timeSec<20){
+    suggestions.push(canTunePI?'Trop rapide → baisser temp. ou augmenter pre-infusion':'Trop rapide → baisser la température')
+    newTemp=clamp(tempC-1,85,96)
+    if(canTunePI) newPreInfSec=clamp(preInfSec+2,1,30)
+  } else if (timeSec>35){
+    suggestions.push(canTunePI?'Trop lent → monter temp. ou réduire pre-infusion':'Trop lent → monter la température')
+    newTemp=clamp(tempC+1,85,96)
+    if(canTunePI) newPreInfSec=clamp(preInfSec-1,1,30)
+  }
+  if (ratio<1.5) suggestions.push(`Rendement faible (1:${ratio.toFixed(1)}) → vérifier mouture`)
+  if (ratio>2.5) suggestions.push(`Rendement élevé (1:${ratio.toFixed(1)}) → réduire le yield`)
+  return { score, ratioScore:Math.round(rS*100), timeScore:Math.round(tS*100), tempScore:Math.round(tmpS*100), ratio, suggestions, newTemp, newPreInfSec, newPreInfPct, isPerfect:score>=90 }
+}
+
+function computeTasteMachine({ taste, tempC, preInfPct, preInfSec, yieldG, piType='none' }, T) {
+  if (taste==='perfect') return { taste, color:T.green, message:'✓ RECETTE SAUVEGARDÉE', detail:[], newTemp:tempC, newPreInfPct:preInfPct, newPreInfSec:preInfSec, newYield:yieldG }
+  const canTunePI = piType === 'programmable'
+  let newTemp=tempC, newPreInfPct=preInfPct, newPreInfSec=preInfSec, detail=[]
+  if (taste==='acid') {
+    newTemp=clamp(tempC+1,85,96)
+    detail.push(`Température → ${newTemp}°C`)
+    if(canTunePI){newPreInfSec=clamp(preInfSec+2,1,30);newPreInfPct=clamp(preInfPct+5,55,99);detail.push(`Pre-infusion → ${newPreInfSec}s à ${newPreInfPct}%`)}
+    detail.push("Extraction accrue → réduit l'acidité")
+  } else {
+    newTemp=clamp(tempC-1,85,96)
+    detail.push(`Température → ${newTemp}°C`)
+    if(canTunePI){newPreInfSec=clamp(preInfSec-1,1,30);newPreInfPct=clamp(preInfPct-5,55,99);detail.push(`Pre-infusion → ${newPreInfSec}s à ${newPreInfPct}%`)}
+    detail.push("Extraction réduite → moins d'amertume")
+  }
+  return { taste, color:taste==='acid'?T.blue:T.orange, message:taste==='acid'?'↑ PLUS CHAUD':'↓ PLUS FROID', detail, newTemp, newPreInfPct, newPreInfSec, newYield:yieldG }
+}
+
+// ─── FOND ANIMÉ : MOLÉCULE CAFÉINE ────────────────────────────────────────────
+const CAF_ATOMS = [
+  {id:'N1', x:-30,y:-14,el:'N'},{id:'C2', x:-18,y:-34,el:'C'},{id:'N3', x:6,  y:-34,el:'N'},
+  {id:'C4', x:20, y:-14,el:'C'},{id:'C5', x:12, y:8,  el:'C'},{id:'C6', x:-18,y:8,  el:'C'},
+  {id:'N9', x:28, y:-22,el:'N'},{id:'C8', x:38, y:0,  el:'C'},{id:'N7', x:28, y:22, el:'N'},
+  {id:'O2', x:-24,y:-54,el:'O'},{id:'O6', x:-30,y:28, el:'O'},
+  {id:'Me1',x:-54,y:-14,el:'CH₃'},{id:'Me3',x:12,y:-54,el:'CH₃'},{id:'Me7',x:36,y:40,el:'CH₃'},
+  {id:'H8', x:58, y:2,  el:'H'},
+]
+const CAF_BONDS = [
+  {a:'N1',b:'C2',d:false},{a:'C2',b:'N3',d:false},{a:'N3',b:'C4',d:true},
+  {a:'C4',b:'C5',d:false},{a:'C5',b:'C6',d:false},{a:'C6',b:'N1',d:false},
+  {a:'C4',b:'N9',d:false},{a:'N9',b:'C8',d:false},{a:'C8',b:'N7',d:false},{a:'N7',b:'C5',d:true},
+  {a:'N1',b:'Me1',d:false},{a:'N3',b:'Me3',d:false},{a:'N7',b:'Me7',d:false},
+  {a:'C2',b:'O2',d:true},{a:'C6',b:'O6',d:true},{a:'C8',b:'H8',d:false},
+]
+const CAF_MAP = {}
+CAF_ATOMS.forEach(a => { CAF_MAP[a.id] = a })
+
+function CaffeineBackground({ darkMode }) {
+  const canvasRef = useRef(null)
+  useEffect(() => {
+    const canvas = canvasRef.current; if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    const resize = () => { canvas.width=window.innerWidth; canvas.height=window.innerHeight }
+    resize(); window.addEventListener('resize', resize)
+
+    const makeMol = () => ({
+      x: Math.random()*window.innerWidth, y: Math.random()*window.innerHeight,
+      vx: (Math.random()-0.5)*0.2, vy: (Math.random()-0.5)*0.2,
+      angle: Math.random()*Math.PI*2, va: (Math.random()-0.5)*0.003,
+      scale: 1.0 + Math.random()*0.5,
+      opacity: darkMode ? 0.11+Math.random()*0.07 : 0.06+Math.random()*0.04,
+    })
+    const mols = Array.from({length:4}, makeMol)
+    let animId
+
+    const draw = () => {
+      const w=canvas.width, h=canvas.height
+      ctx.clearRect(0,0,w,h)
+      const bR=darkMode?210:70, bG=darkMode?165:55, bB=darkMode?85:20
+      const bgRGB=darkMode?'15,15,18':'244,244,248'
+
+      mols.forEach(mol => {
+        mol.x+=mol.vx; mol.y+=mol.vy; mol.angle+=mol.va
+        if(mol.x<-160)mol.x=w+160; if(mol.x>w+160)mol.x=-160
+        if(mol.y<-160)mol.y=h+160; if(mol.y>h+160)mol.y=-160
+        ctx.save()
+        ctx.translate(mol.x,mol.y); ctx.rotate(mol.angle); ctx.scale(mol.scale,mol.scale)
+        ctx.globalAlpha=mol.opacity
+        const bc=`rgb(${bR},${bG},${bB})`
+
+        CAF_BONDS.forEach(({a,b,d})=>{
+          const a1=CAF_MAP[a], a2=CAF_MAP[b]; if(!a1||!a2) return
+          ctx.strokeStyle=bc; ctx.lineWidth=2.2; ctx.lineCap='round'
+          if(d){
+            const dx=a2.x-a1.x, dy=a2.y-a1.y, len=Math.sqrt(dx*dx+dy*dy)
+            const nx=(-dy/len)*2.5, ny=(dx/len)*2.5
+            ctx.beginPath(); ctx.moveTo(a1.x+nx,a1.y+ny); ctx.lineTo(a2.x+nx,a2.y+ny); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(a1.x-nx,a1.y-ny); ctx.lineTo(a2.x-nx,a2.y-ny); ctx.stroke()
+          } else {
+            ctx.beginPath(); ctx.moveTo(a1.x,a1.y); ctx.lineTo(a2.x,a2.y); ctx.stroke()
+          }
+        })
+
+        CAF_ATOMS.forEach(atom=>{
+          if(atom.el==='C') return
+          const fs=atom.el.length>2?9:atom.el==='H'?8:11
+          ctx.font=`bold ${fs}px monospace`
+          ctx.textAlign='center'; ctx.textBaseline='middle'
+          const tw=ctx.measureText(atom.el).width+6, th=fs+4
+          ctx.fillStyle=`rgba(${bgRGB},0.88)`
+          ctx.fillRect(atom.x-tw/2,atom.y-th/2,tw,th)
+          ctx.fillStyle=atom.el==='O'?`rgb(${darkMode?'220,90,90':'180,40,40'})`:
+            atom.el==='N'?`rgb(${darkMode?'90,155,220':'30,80,160'})`:
+            atom.el==='H'?`rgb(${darkMode?'150,150,170':'100,100,120'})`:bc
+          ctx.fillText(atom.el,atom.x,atom.y)
+        })
+
+        if(darkMode){
+          const grd=ctx.createRadialGradient(0,0,0,0,0,65)
+          grd.addColorStop(0,`rgba(${bR},${bG},${bB},0.07)`)
+          grd.addColorStop(1,`rgba(${bR},${bG},${bB},0)`)
+          ctx.globalAlpha=mol.opacity*1.4; ctx.fillStyle=grd
+          ctx.beginPath(); ctx.arc(0,0,65,0,Math.PI*2); ctx.fill()
+        }
+        ctx.restore()
+      })
+      animId=requestAnimationFrame(draw)
+    }
+    draw()
+    return ()=>{ cancelAnimationFrame(animId); window.removeEventListener('resize',resize) }
+  },[darkMode])
+  return <canvas ref={canvasRef} style={{position:'fixed',inset:0,zIndex:0,pointerEvents:'none'}}/>
+}
+
+// ─── MODAL GRIND SIZE CHART ───────────────────────────────────────────────────
+const CHART_METHODS = [
+  {label:'Turc',            min:40,   max:220,  color:'#e05050'},
+  {label:'Espresso',        min:180,  max:380,  color:'#d4b06a'},
+  {label:'Moka',            min:360,  max:660,  color:'#d4a06a'},
+  {label:'AeroPress',       min:320,  max:960,  color:'#7acca0'},
+  {label:'Siphon',          min:375,  max:800,  color:'#a88ad4'},
+  {label:'V60',             min:400,  max:700,  color:'#6ab4d4'},
+  {label:'Filtre machine',  min:300,  max:900,  color:'#6ab4d4'},
+  {label:'Pour-over',       min:410,  max:930,  color:'#7acca0'},
+  {label:'Chemex',          min:600,  max:1000, color:'#a88ad4'},
+  {label:'Steep & Release', min:450,  max:825,  color:'#7aacb4'},
+  {label:'Cupping',         min:460,  max:850,  color:'#c0a060'},
+  {label:'French Press',    min:690,  max:1300, color:'#8080d0'},
+  {label:'Cold Brew',       min:800,  max:1400, color:'#4090b0'},
+  {label:'Cold Drip',       min:820,  max:1270, color:'#4090b0'},
+]
+
+function GrindChartModal({ onClose, T }) {
+  const W=320, PAD=80, MAXUM=1400, BAR_H=18, GAP=6
+  const TOTAL_H = CHART_METHODS.length*(BAR_H+GAP)+60
+  const xScale = v => PAD + (v/MAXUM)*(W-PAD-10)
+  const ticks = [0,200,400,600,800,1000,1200,1400]
+  return (
+    <div style={{position:'fixed',inset:0,background:'#000000ee',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
+      <div style={{background:T.bg2,border:`1px solid ${T.border2}`,borderRadius:12,padding:20,width:'100%',maxWidth:420,maxHeight:'90vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:700,letterSpacing:'0.2em',color:T.gold}}>GRIND SIZE CHART</div>
+          <button onClick={onClose} style={{background:'transparent',border:`1px solid ${T.border}`,color:T.textDim,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:18,lineHeight:1,touchAction:'manipulation'}}>×</button>
+        </div>
+        <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,marginBottom:12,letterSpacing:'0.1em'}}>SOURCE : HONESTCOFFEEGUIDE.COM · EN MICRONS (µm)</div>
+
+        <svg width="100%" viewBox={`0 0 ${W} ${TOTAL_H}`} style={{overflow:'visible'}}>
+          {/* Tick lines */}
+          {ticks.map(t=>(
+            <g key={t}>
+              <line x1={xScale(t)} y1={20} x2={xScale(t)} y2={TOTAL_H-20} stroke={T.border} strokeWidth="0.5" strokeDasharray="2,3"/>
+              <text x={xScale(t)} y={14} textAnchor="middle" style={{fontFamily:'monospace',fontSize:7,fill:T.textMute}}>{t}</text>
+            </g>
+          ))}
+          {/* Grind size classification */}
+          {[{s:0,e:200,l:'XF'},{s:200,e:400,l:'F'},{s:400,e:600,l:'MF'},{s:600,e:800,l:'M'},{s:800,e:1000,l:'MC'},{s:1000,e:1200,l:'C'},{s:1200,e:1400,l:'XC'}].map(z=>(
+            <rect key={z.l} x={xScale(z.s)} y={18} width={xScale(z.e)-xScale(z.s)} height={3} fill={T.border} opacity="0.5"/>
+          ))}
+          {/* Bars */}
+          {CHART_METHODS.map((m,i)=>{
+            const y=26+i*(BAR_H+GAP)
+            const x1=xScale(m.min), x2=xScale(m.max), bw=x2-x1
+            return (
+              <g key={m.label}>
+                <text x={PAD-4} y={y+BAR_H/2+3} textAnchor="end" style={{fontFamily:'monospace',fontSize:8,fill:T.textDim}}>{m.label}</text>
+                <rect x={x1} y={y} width={bw} height={BAR_H} rx="2" fill={m.color} opacity="0.75"/>
+                <text x={x1+2} y={y+BAR_H/2+3} style={{fontFamily:'monospace',fontSize:7,fill:'#fff',opacity:0.9}}>{m.min}</text>
+                {bw>30&&<text x={x2-2} y={y+BAR_H/2+3} textAnchor="end" style={{fontFamily:'monospace',fontSize:7,fill:'#fff',opacity:0.9}}>{m.max}</text>}
+              </g>
+            )
+          })}
+          {/* Legend */}
+          {[{l:'XF=Extra fin',x:0},{l:'F=Fin',x:50},{l:'MF=Mi-fin',x:88},{l:'M=Moyen',x:132},{l:'C=Grossier',x:182}].map(({l,x})=>(
+            <text key={l} x={x} y={TOTAL_H-4} style={{fontFamily:'monospace',fontSize:6,fill:T.textMute}}>{l}</text>
+          ))}
+        </svg>
+      </div>
+    </div>
+  )
+}
+
+// ─── MODAL GUIDE ─────────────────────────────────────────────────────────────
+const GUIDE_MOULIN = `GUIDE D'UTILISATION — ONGLET MOULIN
+
+① CAFÉ UTILISÉ
+Renseignez le café : nom, pays, variété, profil aromatique et process (lavé, naturel, honey…).
+
+📅 DATE DE TORRÉFACTION & FRAÎCHEUR
+Saisis la date de torréfaction. Un badge coloré indique l'état du café :
+• 0–3j   → ⏳ Trop frais (dégazage en cours)
+• 4–21j  → ✓ Optimal (fenêtre idéale)
+• 22–45j → • Bon (toujours utilisable)
+• 46–90j → ! Vieillissant (arômes en déclin)
+• 90j+   → ✕ Stale (oxydé, à éviter)
+
+② MÉTHODE D'EXTRACTION
+Choisissez votre méthode (Espresso, Filtre, AeroPress, Chemex, Moka). Chaque méthode a ses propres cibles de ratio et de temps.
+
+③ MOULIN
+Sélectionnez votre moulin. L'app affiche la plage de réglages recommandée pour votre méthode dans l'unité native du moulin (clics, numéros, µm…).
+
+★ FAVORIS MOULIN
+Tape l'étoile (☆ → ★) à côté d'un moulin pour l'ajouter à tes favoris. Tes favoris :
+• apparaissent en haut du dropdown (section ★ Favoris)
+• s'affichent en chips d'accès rapide quand le sélecteur est replié
+• sont marqués d'une étoile dans le dropdown
+Pratique quand tu jongles entre plusieurs moulins (espresso vs filtre).
+
+④ DOSAGE
+• Dose : quantité de café (g) dans le panier
+• Rendement : quantité de café (g) dans la tasse
+• Ratio = Rendement ÷ Dose (cible 1:2 pour espresso)
+
+⑤ MOUTURE — µm UNIVERSEL
+Le cadran indique la mouture en microns (µm). Si un moulin avec des clics est sélectionné, le clic correspondant est affiché à côté.
+Utilisez −15/−5/+5/+15µm pour ajuster. Tap sur la valeur pour saisir manuellement.
+
+⑥ TEMPS D'EXTRACTION
+Démarrez le timer au début de l'extraction. Visez la plage cible selon votre méthode (ex: 20–35s pour espresso).
+
+⑦ RESSENTI EN TASSE
+Après avoir goûté, appuyez sur :
+• 🍋 Trop acide → mouture plus fine
+• ✨ Parfait → sauvegarde la recette
+• ☕ Trop amer → mouture plus grossière
+L'app ajuste automatiquement la mouture.
+
+👅 NOTES DE DÉGUSTATION
+Note Corps / Sucrosité / Finale (0–5) et coche les arômes perçus (Chocolat, Agrumes, Floral…). Ces notes sont sauvegardées avec le shot et visibles dans l'historique et la comparaison A/B.
+
+⑧ ANALYSE
+Score /100 calculé d'après le ratio et le temps. Un score ≥ 90 = extraction parfaite.
+
+📊 ONGLET ANALYSE
+Suivi des KPI (shots totaux, score moyen, % parfaits), courbe de progression dans le temps, répartition par méthode et top cafés par meilleur score.
+
+📤 PARTAGE & ⇄ COMPARAISON A/B
+Depuis l'historique :
+• 📤 → QR code + lien à coller pour partager une recette (s'ouvre auto à l'arrivée)
+• Sélectionne 2 shots → ⇄ Comparer A/B pour voir les différences côte à côte
+
+CONSEILS
+• Changez UN paramètre à la fois entre chaque shot
+• Attendez que le moulin soit chaud (2–3 shots) avant de dial-in
+• Notez vos recettes avec ✨ pour les retrouver dans l'historique
+
+🫘 EASTER EGG — COFFEE INVADER
+Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suffisent à la réveiller.
+Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…`
+
+const GUIDE_MACHINE = `GUIDE D'UTILISATION — ONGLET MACHINE
+(Espresso · multi-machines)
+
+① CAFÉ UTILISÉ
+Renseignez le café : nom, pays, variété, profil aromatique, process.
+
+📅 DATE DE TORRÉFACTION & FRAÎCHEUR
+Saisis la date de torréfaction. Un badge coloré indique l'état du café :
+• 0–3j   → ⏳ Trop frais (dégazage)
+• 4–21j  → ✓ Optimal
+• 22–45j → • Bon
+• 46–90j → ! Vieillissant
+• 90j+   → ✕ Stale
+
+⚙ SÉLECTEUR DE MACHINE
+Sélectionne ta machine espresso. 13 modèles disponibles classés en
+4 catégories de pré-infusion :
+
+★ FAVORIS MACHINE
+Tape l'étoile (☆ → ★) à côté d'une machine pour la mettre en favori.
+Les favoris apparaissent en haut du dropdown et en chips rapides
+quand le sélecteur est replié — un tap suffit pour basculer.
+• Sans pré-infusion (Gaggia Classic Pro, Rancilio Silvia, Dedica…)
+  → seules la dose, le yield, le temps et la température comptent
+• Pré-infusion fixe (Bambino, Barista Express, Linea Micra)
+  → valeurs constructeur appliquées automatiquement, non modifiables
+• Pré-infusion programmable (Breville Dual Boiler, Oracle, Lelit Bianca)
+  → durée et pression réglables · ajustées par le moteur de dial-in
+• Levier / manuelle (La Pavoni, Flair 58, Cafelat Robot)
+  → pré-infusion gérée à la main
+
+② DOSAGE
+• Dose : café (g) dans le panier filtre (typiquement 18–20g)
+• Rendement : café extrait (g) dans la tasse (cible 36–40g pour 1:2)
+
+③ PRE-INFUSION
+La pre-infusion humidifie le café avant l'extraction pleine pression.
+• Pression : 55–99% (typiquement 70–80%)
+• Durée : 3–8 secondes recommandés
+→ Plus de pre-infusion = extraction plus uniforme, moins d'amertume
+(Disponible uniquement sur les machines à PI fixe ou programmable)
+
+④ TEMPS D'EXTRACTION
+Démarrez le timer. Cible : 20–35 secondes totales (pre-infusion incluse).
+
+⑤ TEMPÉRATURE
+Cible : 91–94°C pour la plupart des cafés.
+• Cafés clairs / acides → monter la température
+• Cafés foncés / amers → baisser la température
+
+⑥ RESSENTI EN TASSE
+• 🍋 Trop acide → hausse temp. (+ pre-infusion si programmable)
+• ✨ Parfait → sauvegarde la recette
+• ☕ Trop amer → baisse temp. (− pre-infusion si programmable)
+
+👅 NOTES DE DÉGUSTATION
+Note Corps / Sucrosité / Finale (0–5) et coche les arômes perçus.
+Ces notes sont sauvegardées avec le shot et utilisées dans la
+comparaison A/B et les analytics.
+
+⑦ ANALYSE
+Score sur 100 combinant ratio, temps et température.
+
+📊 ONGLET ANALYSE
+KPI (shots, score moyen, % parfaits), courbe de progression dans
+le temps, histogramme par méthode, top cafés par meilleur score.
+
+📤 PARTAGE & ⇄ COMPARAISON A/B
+Depuis l'historique :
+• 📤 → QR code + lien à coller pour partager une recette
+• Sélectionne 2 shots → ⇄ Comparer A/B pour identifier le meilleur
+
+🫘 EASTER EGG — COFFEE INVADER
+Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suffisent à la réveiller.
+Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…
+(Disponible uniquement avec une machine à pré-infusion programmable)`
+
+const GUIDE_RECETTES = `GUIDE D'UTILISATION — ONGLET RECETTES
+
+⚙ CONVERTIR LES RÉGLAGES POUR MON MOULIN
+Choisis ton moulin pour voir la mouture en clics/numéros natifs en plus
+des µm. Tape ☆ → ★ pour ajouter le moulin à tes favoris : il apparaît
+en chips d'accès rapide au-dessus du sélecteur.
+
+▽ MÉTHODES DISPONIBLES
+12 méthodes filtre & alternatives : V60, Switch, Chemex, French Press,
+AeroPress, Fellow Aiden, Drip, Kalita, Origami, Syphon, Cold Brew, Turkish.
+Chaque méthode propose des recettes championnat et un générateur.
+
+✨ GÉNÉRATEUR DE RECETTE
+Crée une recette personnalisée en 4 paramètres :
+① Café utilisé — nom, pays, process (lavé / naturel / honey)
+② Niveau de torréfaction — Light, Medium, Dark
+③ Profil en tasse — Balanced, Fruity, Citrus, Floral, Chocolate, Sweet (multi)
+④ Intensité — Mild, Balanced, Strong
+
+L'app calcule dose, ratio, eau, température, mouture (µm), temps total
+et génère les étapes de versement adaptées à la méthode.
+
+🧠 COACH IA — MODE ITÉRATIF (toggle bouton violet)
+Active le Coach IA pour passer du mode 'recette unique' au mode
+'ajustement après dégustation'. Workflow :
+① Génère ta recette de départ
+② Brasse, goûte
+③ Tape "J'AI GOÛTÉ — AJUSTER LA RECETTE"
+④ Choisis le défaut dominant : 🍋 Acide / ⚡ Amer / 💧 Fade /
+   🌿 Astringent / ➖ Sans relief / 🛢 Trop lourd / ⭐ Équilibré
+⑤ L'app applique UN seul ajustement (mouture OU temp OU ratio)
+   selon les protocoles SCA. L'historique des itérations s'affiche.
+⑥ Itère jusqu'à atteindre l'équilibre
+
+Principe SCA : ne change qu'UNE variable à la fois pour identifier
+précisément ce qui marche. L'app alterne automatiquement les variables
+d'une itération à l'autre pour ne pas marteler la même.
+
+💾 RECETTES SAUVEGARDÉES (⭐ Mes recettes)
+Sauvegarde n'importe quelle recette générée ou ajustée — elle apparaît
+dans le panneau "⭐ Mes recettes". Tes recettes sauvegardées sont
+visibles depuis n'importe quelle méthode active.
+
+✕ ANNULER LA RECETTE
+Le bouton ✕ à côté du bouton Sauvegarder efface la recette générée
+et remet à zéro l'historique du Coach IA. Pratique pour repartir
+sur de nouveaux paramètres.
+
+📤 PARTAGE
+Tap "Partager" sur une recette → QR code + lien court pour la coller
+ou la scanner sur un autre appareil.
+
+CONSEILS
+• Active le Coach IA dès le 2e essai sur un nouveau café
+• Note tes recettes réussies (⭐ Sauvegarder) pour les retrouver
+• Le Coach alterne mouture/temp/ratio : si l'app suggère temp +2°C
+  et que tu préfères changer la mouture, demande un autre feedback
+  ou ajuste manuellement
+• Pour Fellow Aiden, le générateur sélectionne automatiquement
+  un profil expert (Washed Clarity, Natural Sweetness, Hybrid…)
+  selon le process du café`
+
+function GuideModal({ mode, onClose, T }) {
+  const text = mode === 'moulin' ? GUIDE_MOULIN : (mode === 'machine' ? GUIDE_MACHINE : GUIDE_RECETTES)
+  const title = mode === 'moulin' ? '⚙ GUIDE — MOULIN' : (mode === 'machine' ? '☕ GUIDE — MACHINE' : '▽ GUIDE — RECETTES')
+  return (
+    <div style={{position:'fixed',inset:0,background:'#000000ee',zIndex:2000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={onClose}>
+      <div style={{background:T.bg2,border:`1px solid ${T.border2}`,borderRadius:'16px 16px 0 0',padding:20,width:'100%',maxWidth:520,maxHeight:'88vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:700,letterSpacing:'0.2em',color:T.gold}}>{title}</div>
+          <button onClick={onClose} style={{background:'transparent',border:`1px solid ${T.border}`,color:T.textDim,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:18,lineHeight:1,touchAction:'manipulation'}}>×</button>
+        </div>
+        <pre style={{fontFamily:'monospace',fontSize:11,color:T.text,lineHeight:1.7,whiteSpace:'pre-wrap',margin:0}}>{text}</pre>
+      </div>
+    </div>
+  )
+}
+
+// ─── DIAL SVG ─────────────────────────────────────────────────────────────────
+function Dial({ value, range, color, T }) {
+  const pct=(value-range[0])/(range[1]-range[0])
+  const rot=pct*270-135
+  const arc=(cx,cy,r,a1,a2)=>{
+    const rad=a=>((a-90)*Math.PI/180)
+    const x1=cx+r*Math.cos(rad(a2)),y1=cy+r*Math.sin(rad(a2)),x2=cx+r*Math.cos(rad(a1)),y2=cy+r*Math.sin(rad(a1))
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${a2-a1<=180?0:1} 0 ${x2} ${y2}`
+  }
+  return (
+    <svg width="160" height="160" viewBox="0 0 160 160">
+      <circle cx="80" cy="80" r="74" fill="none" stroke={T.border} strokeWidth="2"/>
+      <circle cx="80" cy="80" r="68" fill={T.bg2}/>
+      <path d={arc(80,80,60,-135,135)} fill="none" stroke={T.bg3} strokeWidth="9" strokeLinecap="round"/>
+      <path d={arc(80,80,60,-135,-135+270*pct)} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round" style={{filter:`drop-shadow(0 0 7px ${color}bb)`}}/>
+      {Array.from({length:37}).map((_,i)=>{
+        const a=((-135+270/36*i)*Math.PI/180), maj=i%6===0, r1=maj?48:51, r2=57
+        return <line key={i} x1={80+r1*Math.cos(a)} y1={80+r1*Math.sin(a)} x2={80+r2*Math.cos(a)} y2={80+r2*Math.sin(a)} stroke={maj?T.border2:T.border} strokeWidth={maj?2:1}/>
+      })}
+      <circle cx="80" cy="80" r="24" fill={T.bg2} stroke={T.border2} strokeWidth="1.5"/>
+      <g transform={`rotate(${rot},80,80)`}>
+        <line x1="80" y1="80" x2="80" y2="46" stroke={color} strokeWidth="2.5" strokeLinecap="round" style={{filter:`drop-shadow(0 0 5px ${color})`}}/>
+        <circle cx="80" cy="80" r="4" fill={color}/>
+      </g>
+    </svg>
+  )
+}
+
+// ─── TIMER (contrôlé — état géré par le parent) ──────────────────────────────
+function Timer({ running, elapsed, onStart, onPause, onReset, T }) {
+  return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+      <div style={{fontFamily:'monospace',fontSize:44,fontWeight:300,color:running?T.gold:T.textDim,letterSpacing:'0.05em',textShadow:running?`0 0 28px ${T.gold}66`:'none'}}>
+        {String(Math.floor(elapsed/60)).padStart(2,'0')}:{String(elapsed%60).padStart(2,'0')}
+      </div>
+      <div style={{display:'flex',gap:8}}>
+        {!running?<button onClick={onStart} style={bs(T.gold,T)}>{elapsed>0?'▶ REPRENDRE':'▶ START'}</button>:<button onClick={onPause} style={bs(T.textDim,T)}>⏸ PAUSE</button>}
+        <button onClick={onReset} style={bs(T.textMute,T)}>↺ RESET</button>
+      </div>
+    </div>
+  )
+}
+const bs=(c,T)=>({fontFamily:'sans-serif',fontSize:12,letterSpacing:'0.15em',padding:'8px 18px',border:`1px solid ${c}`,background:`${c}22`,color:c,cursor:'pointer',borderRadius:4,touchAction:'manipulation'})
+
+// ─── NUMPAD ───────────────────────────────────────────────────────────────────
+function NumPad({ label, unit, initial, min, max, onConfirm, onClose, T }) {
+  const [val,setVal]=useState(String(initial))
+  const push=d=>{
+    if(d==='⌫'){setVal(v=>v.length>1?v.slice(0,-1):'0');return}
+    if(d==='OK'){const n=parseFloat(val);onConfirm(isNaN(n)?initial:clamp(n,min,max));return}
+    setVal(v=>{const next=v==='0'?String(d):v+d;return next.length>5?v:next})
+  }
+  return (
+    <div style={{position:'fixed',inset:0,background:'#000000dd',zIndex:9999,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={onClose}>
+      <div style={{background:T.bg2,borderRadius:'16px 16px 0 0',padding:20,width:'100%',maxWidth:400,border:`1px solid ${T.border2}`,boxShadow:`0 -8px 40px ${T.shadow}`}} onClick={e=>e.stopPropagation()}>
+        <div style={{textAlign:'center',marginBottom:16}}>
+          <div style={{fontSize:10,letterSpacing:'0.3em',color:T.textMute,textTransform:'uppercase',marginBottom:8}}>{label}</div>
+          <div style={{fontFamily:'monospace',fontSize:44,color:T.gold}}>{val}<span style={{fontSize:14,color:T.textDim,marginLeft:4}}>{unit}</span></div>
+          <div style={{fontSize:10,color:T.textMute,marginTop:4}}>min {min} · max {max}</div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10}}>
+          {['1','2','3','4','5','6','7','8','9','⌫','0','OK'].map(k=>(
+            <button key={k} onClick={()=>push(k)} style={{height:60,fontSize:k==='OK'?14:24,fontFamily:k==='OK'?'sans-serif':'monospace',fontWeight:k==='OK'?700:400,letterSpacing:k==='OK'?'0.15em':'0',background:k==='OK'?`${T.gold}22`:T.bg3,border:k==='OK'?`1px solid ${T.gold}88`:`1px solid ${T.border}`,color:k==='OK'?T.gold:k==='⌫'?T.textDim:T.text,borderRadius:8,cursor:'pointer',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>{k}</button>
+          ))}
+        </div>
+        <button onClick={onClose} style={{marginTop:12,width:'100%',padding:'12px 0',background:'transparent',border:`1px solid ${T.border}`,color:T.textMute,borderRadius:8,cursor:'pointer',fontSize:12,letterSpacing:'0.2em',touchAction:'manipulation'}}>ANNULER</button>
+      </div>
+    </div>
+  )
+}
+
+function NumIn({ label, val, set, unit, min, max, step=1, color, T }) {
+  const [open,setOpen]=useState(false)
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+      {label&&<div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase'}}>{label}</div>}
+      <div style={{display:'flex',alignItems:'center'}}>
+        <button onClick={()=>set(v=>r2(clamp(v-step,min,max)))} style={nb(T)}>−</button>
+        <div onClick={()=>setOpen(true)} style={{padding:'0 12px',height:38,background:T.inputBg,border:`1px solid ${T.border}`,cursor:'pointer',fontFamily:'monospace',fontSize:17,color,display:'flex',alignItems:'center',gap:3,minWidth:80,justifyContent:'center',userSelect:'none',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>
+          {val}<span style={{fontSize:10,color:T.textMute}}>{unit}</span>
+        </div>
+        <button onClick={()=>set(v=>r2(clamp(v+step,min,max)))} style={nb(T)}>+</button>
+      </div>
+      <div style={{fontSize:9,color:T.textMute,letterSpacing:'0.1em',textAlign:'center'}}>↑ tap pour saisir</div>
+      {open&&<NumPad label={label||unit} unit={unit} initial={val} min={min} max={max} onConfirm={n=>{set(n);setOpen(false)}} onClose={()=>setOpen(false)} T={T}/>}
+    </div>
+  )
+}
+const nb=T=>({width:38,height:38,background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,cursor:'pointer',fontSize:18,display:'flex',alignItems:'center',justifyContent:'center',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'})
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function Bar({ pct, color, T }) {
+  return <div style={{marginTop:6,height:4,background:T.bg3,borderRadius:2,overflow:'hidden'}}><div style={{height:'100%',width:`${clamp(pct,0,100)}%`,background:color,borderRadius:2,transition:'width 0.3s',boxShadow:`0 0 8px ${color}88`}}/></div>
+}
+function Bar2({ label, v, T }) {
+  const c=v>=90?T.green:v>=70?T.gold:T.red
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
+      <div style={{fontSize:10,letterSpacing:'0.12em',color:T.textMute,width:44,textTransform:'uppercase'}}>{label}</div>
+      <div style={{width:80,height:4,background:T.bg3,borderRadius:2,overflow:'hidden'}}><div style={{height:'100%',width:`${v}%`,background:c,transition:'width 0.5s',boxShadow:`0 0 4px ${c}88`}}/></div>
+      <div style={{fontFamily:'monospace',fontSize:10,color:c,fontWeight:700}}>{v}</div>
+    </div>
+  )
+}
+function ScoreRing({ score, T }) {
+  const c=score>=90?T.green:score>=75?T.gold:score>=55?T.blue:T.red
+  const r=36,circ=2*Math.PI*r,filled=(score/100)*circ
+  return (
+    <svg width="90" height="90" viewBox="0 0 90 90">
+      <circle cx="45" cy="45" r={r} fill="none" stroke={T.bg3} strokeWidth="7"/>
+      <circle cx="45" cy="45" r={r} fill="none" stroke={c} strokeWidth="7" strokeDasharray={`${filled} ${circ}`} strokeDashoffset={circ*0.25} strokeLinecap="round" style={{transition:'stroke-dasharray 0.7s',filter:`drop-shadow(0 0 10px ${c}cc)`}}/>
+      <text x="45" y="42" textAnchor="middle" style={{fontFamily:'monospace',fontSize:18,fill:c,fontWeight:700}}>{score}</text>
+      <text x="45" y="54" textAnchor="middle" style={{fontSize:9,fill:T.textMute}}>/100</text>
+    </svg>
+  )
+}
+const dBtn=(color,T)=>({padding:'8px 11px',border:`1px solid ${color}55`,background:`${color}15`,color:color,borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'monospace',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'})
+const card=T=>({background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,padding:18,display:'flex',flexDirection:'column',marginBottom:16,boxShadow:`0 2px 12px ${T.shadow}`})
+const SL=T=>({fontSize:10,letterSpacing:'0.35em',color:T.textMute,textTransform:'uppercase',marginBottom:12})
+
+// ─── TASTE BUTTONS ────────────────────────────────────────────────────────────
+function TasteButtons({ flash, onTaste, feedback, T }) {
+  const btns=[
+    {id:'acid',   emoji:'🍋',text:'Trop acide',sub:'corrige acidité',  color:T.blue},
+    {id:'perfect',emoji:'✨',text:'Parfait',    sub:'✓ sauvegarder',   color:T.green},
+    {id:'bitter', emoji:'☕',text:'Trop amer',  sub:'corrige amertume', color:T.orange},
+  ]
+  return (
+    <div style={card(T)}>
+      <div style={SL(T)}>Ressenti en tasse</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+        {btns.map(({id,emoji,text,sub,color})=>(
+          <button key={id} onClick={()=>onTaste(id)} style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:6,padding:'16px 6px',border:`2px solid ${flash===id?color:color+'44'}`,background:flash===id?`${color}28`:T.bg3,color:flash===id?color:`${color}cc`,borderRadius:8,cursor:'pointer',transition:'all 0.15s',boxShadow:flash===id?`0 0 28px ${color}77`:'none',touchAction:'manipulation',WebkitTapHighlightColor:'transparent',minHeight:86}}>
+            <span style={{fontSize:26,lineHeight:1}}>{emoji}</span>
+            <span style={{fontSize:13,fontWeight:700,textAlign:'center',lineHeight:1.2,color:'inherit'}}>{text}</span>
+            <span style={{fontSize:9,opacity:0.8,fontFamily:'monospace',color:'inherit'}}>{sub}</span>
+          </button>
+        ))}
+      </div>
+      {feedback&&(
+        <div style={{marginTop:12,padding:'12px 14px',background:`${feedback.color}15`,border:`1px solid ${feedback.color}66`,borderRadius:6,display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{fontSize:17,fontWeight:700,letterSpacing:'0.08em',color:feedback.color,textShadow:`0 0 14px ${feedback.color}88`}}>{feedback.message}</div>
+          {feedback.steps>0&&<div style={{fontFamily:'monospace',fontSize:11,color:T.textDim}}>{feedback.steps} clic{feedback.steps>1?'s':''}</div>}
+          {feedback.detail.map((d,i)=><div key={i} style={{fontFamily:'monospace',fontSize:10,color:T.textDim,background:T.bg,border:`1px solid ${T.border}`,padding:'3px 8px',borderRadius:3,display:'inline-block',marginRight:6,marginBottom:4}}>{d}</div>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── CARTE CAFÉ ───────────────────────────────────────────────────────────────
+function CoffeeCard({ coffee, setCoffee, T }) {
+  const [open,setOpen]=useState(false)
+  const [showLib,setShowLib]=useState(false)
+  const [lib,setLib]=useState(()=>{try{const s=localStorage.getItem(COFFEE_LIB_KEY);return s?JSON.parse(s):[]}catch{return[]}})
+
+  const fields=[
+    {key:'name',   label:'Nom du café',      placeholder:'ex: Yirgacheffe Koke'},
+    {key:'country',label:'Pays / Région',    placeholder:'ex: Éthiopie, Guji'},
+    {key:'variety',label:'Variété(s)',        placeholder:'ex: Heirloom, Typica'},
+    {key:'profile',label:'Profil aromatique',placeholder:'ex: Agrumes, Jasmin, Miel'},
+    {key:'process',label:'Process',          placeholder:'ex: Lavé, Naturel, Honey'},
+  ]
+  const has=Object.entries(coffee).some(([k,v])=>k!=='roastDate'&&typeof v==='string'&&v.trim()!=='')
+  const fresh=freshnessState(daysSinceRoast(coffee.roastDate),T)
+
+  const saveCoffee=()=>{
+    if(!coffee.name.trim())return
+    const updated=[{...coffee,id:Date.now()},...lib.filter(c=>c.name.trim().toLowerCase()!==coffee.name.trim().toLowerCase())].slice(0,30)
+    setLib(updated)
+    try{localStorage.setItem(COFFEE_LIB_KEY,JSON.stringify(updated))}catch{}
+  }
+  const deleteCoffee=(id,e)=>{
+    e.stopPropagation()
+    const updated=lib.filter(c=>c.id!==id)
+    setLib(updated)
+    try{localStorage.setItem(COFFEE_LIB_KEY,JSON.stringify(updated))}catch{}
+  }
+  const selectCoffee=(c)=>{
+    setCoffee({name:c.name||'',country:c.country||'',variety:c.variety||'',profile:c.profile||'',process:c.process||'',roastDate:c.roastDate||''})
+    setShowLib(false)
+  }
+
+  return (
+    <div style={card(T)}>
+      {/* Modal bibliothèque */}
+      {showLib&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setShowLib(false)}>
+          <div style={{width:'100%',maxWidth:480,background:T.bg2,borderRadius:'12px 12px 0 0',padding:'20px 16px 32px',maxHeight:'70vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+              <div style={{fontSize:12,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700}}>☕ Mes cafés</div>
+              <button onClick={()=>setShowLib(false)} style={{background:'none',border:'none',color:T.textMute,fontSize:20,cursor:'pointer',padding:'0 4px'}}>✕</button>
+            </div>
+            {/* Catalogue Torrea */}
+            <div style={{fontSize:10,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',marginBottom:8,marginTop:4}}>Catalogue Torrea</div>
+            {COFFEE_CATALOG.map((c,i)=>(
+              <div key={i} onClick={()=>selectCoffee(c)} style={{padding:'10px 12px',marginBottom:8,background:`${T.gold}10`,border:`1px solid ${T.gold}44`,borderRadius:6,cursor:'pointer'}}>
+                <div style={{fontFamily:'monospace',fontSize:13,color:T.gold,fontWeight:700}}>{c.name} <span style={{fontWeight:400,color:T.textDim}}>— {c.country}</span></div>
+                <div style={{fontFamily:'monospace',fontSize:10,color:T.textDim,marginTop:3}}>{c.profile}</div>
+                {c.notes&&<div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,marginTop:2}}>{c.notes}</div>}
+              </div>
+            ))}
+
+            {/* Cafés perso sauvegardés */}
+            {lib.length>0&&<>
+              <div style={{fontSize:10,letterSpacing:'0.2em',color:T.blue,textTransform:'uppercase',marginBottom:8,marginTop:12}}>Mes cafés</div>
+              {lib.map(c=>(
+                <div key={c.id} onClick={()=>selectCoffee(c)} style={{padding:'10px 12px',marginBottom:8,background:T.bg3,border:`1px solid ${T.border}`,borderRadius:6,cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontFamily:'monospace',fontSize:13,color:T.text,fontWeight:700}}>{c.name}</div>
+                    <div style={{fontFamily:'monospace',fontSize:10,color:T.textDim,marginTop:2}}>{[c.country,c.process,c.variety].filter(Boolean).join(' · ')}</div>
+                  </div>
+                  <button onClick={e=>deleteCoffee(c.id,e)} style={{background:'none',border:'none',color:T.textMute,fontSize:16,cursor:'pointer',padding:'0 4px',flexShrink:0}}>🗑</button>
+                </div>
+              ))}
+            </>}
+          </div>
+        </div>
+      )}
+
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{...SL(T),marginBottom:0}}>☕ Café utilisé {has&&<span style={{color:T.gold,marginLeft:4}}>●</span>}</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <button onClick={e=>{e.stopPropagation();setShowLib(true)}} style={{padding:'4px 10px',background:`${T.gold}18`,border:`1px solid ${T.gold}55`,color:T.gold,borderRadius:4,cursor:'pointer',fontSize:10,letterSpacing:'0.1em',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>
+            📋 LISTE ({lib.length})
+          </button>
+          <div style={{fontSize:18,color:T.textMute,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',lineHeight:1}}>▾</div>
+        </div>
+      </div>
+      {!open&&has&&(
+        <div style={{marginTop:8}}>
+          <div style={{fontFamily:'monospace',fontSize:11,color:T.gold}}>{coffee.name||'—'}{coffee.country?` · ${coffee.country}`:''}{coffee.process?` · ${coffee.process}`:''}</div>
+          {fresh&&<div style={{display:'inline-block',marginTop:6,padding:'2px 8px',background:`${fresh.color}18`,border:`1px solid ${fresh.color}66`,borderRadius:10,fontFamily:'monospace',fontSize:10,color:fresh.color}}>{fresh.icon} {fresh.label}</div>}
+        </div>
+      )}
+      {open&&(
+        <div style={{display:'flex',flexDirection:'column',gap:12,marginTop:14}}>
+          {fields.map(({key,label,placeholder})=>(
+            <div key={key}>
+              <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:5}}>{label}</div>
+              <input value={coffee[key]||''} onChange={e=>setCoffee(c=>({...c,[key]:e.target.value}))} placeholder={placeholder}
+                style={{width:'100%',padding:'9px 12px',background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:4,color:T.text,fontFamily:'monospace',fontSize:13,outline:'none',WebkitAppearance:'none'}}/>
+            </div>
+          ))}
+          {/* Date de torréfaction + fraîcheur */}
+          <div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
+              <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase'}}>Date de torréfaction</div>
+              {fresh&&<span style={{fontFamily:'monospace',fontSize:10,color:fresh.color,fontWeight:700}}>{fresh.icon} {fresh.label}</span>}
+            </div>
+            <input type="date" value={coffee.roastDate||''} onChange={e=>setCoffee(c=>({...c,roastDate:e.target.value}))}
+              style={{width:'100%',padding:'9px 12px',background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:4,color:T.text,fontFamily:'monospace',fontSize:13,outline:'none',WebkitAppearance:'none',colorScheme:T===DARK?'dark':'light'}}/>
+            <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,marginTop:4}}>Fenêtre optimale : 7–21 jours après torréfaction</div>
+          </div>
+          {has&&(
+            <button onClick={saveCoffee} style={{padding:'10px 0',background:`${T.gold}18`,border:`1px solid ${T.gold}66`,color:T.gold,borderRadius:4,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation'}}>
+              💾 SAUVEGARDER CE CAFÉ
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── SÉLECTEUR MOULIN ─────────────────────────────────────────────────────────
+function GrinderSelector({ grinderId, setGrinderId, method, grindValue, setGrindValue, T }) {
+  const [open,setOpen]=useState(false)
+  const g=GRINDERS[grinderId]
+  const range=g&&g[method]?g[method]:null
+  const has=grinderId!=='none'
+  const {favs,toggle:toggleFav,isFav}=useFavorites(FAV_GRINDERS_KEY)
+  const brands=['Breville (Sage)','Baratza','Mahlkönig','Eureka','Niche','Comandante','1Zpresso','Timemore','Fellow','Wilfa','Hario','Porlex','Kinu','Rancilio',"De'Longhi",'Weber','Lagom','Turin/DF','Mazzer','Capresso']
+  const favEntries=favs.map(id=>[id,GRINDERS[id]]).filter(([,v])=>v)
+
+  return (
+    <div style={card(T)}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{...SL(T),marginBottom:0}}>⚙ Moulin {has&&<span style={{color:T.gold,marginLeft:4}}>●</span>}</div>
+        <div style={{fontSize:18,color:T.textMute,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',lineHeight:1}}>▾</div>
+      </div>
+      {!open&&has&&(
+        <div style={{marginTop:8}}>
+          <div style={{fontFamily:'monospace',fontSize:12,color:T.gold}}>{g.label}{g.brand?` — ${g.brand}`:''}</div>
+          {range&&<div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:3}}>Plage {method} : {range[0]}–{range[1]} {g.unit||'µm'}</div>}
+        </div>
+      )}
+      {!open&&favEntries.length>0&&(
+        <div style={{marginTop:10,display:'flex',gap:6,flexWrap:'wrap'}}>
+          {favEntries.map(([id,v])=>(
+            <button key={id} onClick={(e)=>{e.stopPropagation();setGrinderId(id)}} style={{
+              padding:'5px 10px',fontSize:10,fontFamily:'monospace',
+              border:`1px solid ${grinderId===id?T.gold:`${T.gold}55`}`,
+              background:grinderId===id?`${T.gold}22`:`${T.gold}0a`,
+              color:grinderId===id?T.gold:T.textDim,
+              borderRadius:14,cursor:'pointer',touchAction:'manipulation',
+              fontWeight:grinderId===id?700:400,
+            }}>★ {v.label}</button>
+          ))}
+        </div>
+      )}
+      {open&&(
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:10}}>Sélectionner le moulin</div>
+          {/* None option */}
+          <button onClick={()=>{setGrinderId('none');setOpen(false)}} style={{width:'100%',textAlign:'left',padding:'9px 12px',marginBottom:8,background:grinderId==='none'?`${T.gold}18`:T.bg3,border:`1px solid ${grinderId==='none'?T.gold:T.border}`,borderRadius:5,color:grinderId==='none'?T.gold:T.textDim,cursor:'pointer',fontSize:12,touchAction:'manipulation'}}>
+            — Sélectionner un moulin —
+          </button>
+          {favEntries.length>0&&(
+            <div>
+              <div style={{fontSize:9,letterSpacing:'0.3em',color:T.gold,textTransform:'uppercase',marginTop:10,marginBottom:5,paddingLeft:8,borderLeft:`2px solid ${T.gold}`}}>★ Favoris</div>
+              {favEntries.map(([id,v])=>(
+                <div key={id} style={{display:'flex',alignItems:'stretch',marginBottom:4}}>
+                  <button onClick={()=>{setGrinderId(id);setOpen(false)}} style={{flex:1,textAlign:'left',padding:'9px 12px',background:grinderId===id?`${T.gold}18`:T.bg3,border:`1px solid ${grinderId===id?T.gold:T.border}`,borderRadius:'5px 0 0 5px',borderRight:'none',color:grinderId===id?T.gold:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                    <span style={{fontWeight:grinderId===id?700:400}}>{v.label}{v.brand?` — ${v.brand}`:''}</span>
+                    {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                  </button>
+                  <button onClick={(e)=>{e.stopPropagation();toggleFav(id)}} style={{padding:'0 12px',background:`${T.gold}18`,border:`1px solid ${T.gold}`,borderRadius:'0 5px 5px 0',color:T.gold,cursor:'pointer',fontSize:14,touchAction:'manipulation'}}>★</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {brands.map(brand=>{
+            const entries=Object.entries(GRINDERS).filter(([,v])=>v.brand===brand)
+            if(!entries.length) return null
+            return (
+              <div key={brand}>
+                <div style={{fontSize:9,letterSpacing:'0.3em',color:T.textMute,textTransform:'uppercase',marginTop:10,marginBottom:5,borderLeft:`2px solid ${T.gold}44`,paddingLeft:8}}>{brand}</div>
+                {entries.map(([k,v])=>(
+                  <div key={k} style={{display:'flex',alignItems:'stretch',marginBottom:4}}>
+                    <button onClick={()=>{setGrinderId(k);setOpen(false)}} style={{flex:1,textAlign:'left',padding:'9px 12px',background:grinderId===k?`${T.gold}18`:T.bg3,border:`1px solid ${grinderId===k?T.gold:T.border}`,borderRadius:'5px 0 0 5px',borderRight:'none',color:grinderId===k?T.gold:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                      <span style={{fontWeight:grinderId===k?700:400}}>{v.label}</span>
+                      {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                    </button>
+                    <button onClick={(e)=>{e.stopPropagation();toggleFav(k)}} style={{padding:'0 12px',background:isFav(k)?`${T.gold}18`:T.bg3,border:`1px solid ${isFav(k)?T.gold:T.border}`,borderLeft:'none',borderRadius:'0 5px 5px 0',color:isFav(k)?T.gold:T.textMute,cursor:'pointer',fontSize:14,touchAction:'manipulation'}} title={isFav(k)?'Retirer des favoris':'Ajouter aux favoris'}>{isFav(k)?'★':'☆'}</button>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── GRIND BAR — BARRE HORIZONTALE AVEC ZONES PAR MÉTHODE ────────────────────
+// Affiche toute la plage µm, les zones de chaque méthode, la zone idéale mise
+// en avant, la valeur actuelle, et permet le tap pour saisir directement.
+function GrindBar({ value, method, grinder, onChange, T }) {
+  const mColors = { espresso:T.gold, filter:T.blue, aeropress:T.green, chemex:T.purple, moka:T.orange }
+  const m = BREW_METHODS[method]
+  const mc = mColors[method] || T.gold
+
+  // Plage totale affichée = plage du moulin (si sélectionné) sinon plage universelle
+  const totalMin = grinder && grinder.minµm ? grinder.minµm : 0
+  const totalMax = grinder && grinder.maxµm ? grinder.maxµm : 1200
+  const span = totalMax - totalMin
+
+  // Zone idéale selon la méthode
+  const ideal = m.grindRangeµm
+
+  const barRef = useRef(null)
+  const x = v => ((v - totalMin) / span) * 100 // %
+
+  // Statut "DANS LA ZONE"
+  const inZone = value >= ideal[0] && value <= ideal[1]
+  const tooFine = value < ideal[0]
+  const tooCoarse = value > ideal[1]
+  const statusColor = inZone ? T.green : T.orange
+  const statusLabel = inZone ? '✓ DANS LA ZONE' : tooFine ? '← TROP FIN' : '→ TROP GROSSIER'
+
+  // Tap / drag sur la barre pour saisir directement
+  const handleBarTap = (clientX) => {
+    const rect = barRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const ratio = clamp((clientX - rect.left) / rect.width, 0, 1)
+    const newVal = Math.round((totalMin + ratio * span) / 5) * 5
+    onChange(clamp(newVal, totalMin, totalMax))
+  }
+  const onPointerDown = e => {
+    e.preventDefault()
+    const cx = e.clientX ?? e.touches?.[0]?.clientX
+    if (cx) handleBarTap(cx)
+    const move = ev => {
+      const mx = ev.clientX ?? ev.touches?.[0]?.clientX
+      if (mx) handleBarTap(mx)
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      window.removeEventListener('touchmove', move)
+      window.removeEventListener('touchend', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+    window.addEventListener('touchmove', move, { passive: false })
+    window.addEventListener('touchend', up)
+  }
+
+  // Toutes les méthodes, affichées en bandes empilées sous la barre principale
+  const methodsList = Object.entries(BREW_METHODS).map(([k,v])=>({
+    key:k, label:v.label, icon:v.icon, range:v.grindRangeµm, color:mColors[k]||T.gold,
+  }))
+
+  return (
+    <div style={{width:'100%',display:'flex',flexDirection:'column',gap:12}}>
+
+      {/* BARRE PRINCIPALE tappable */}
+      <div
+        ref={barRef}
+        onMouseDown={onPointerDown}
+        onTouchStart={onPointerDown}
+        style={{
+          position:'relative',
+          height:44,
+          background:T.bg3,
+          border:`1px solid ${T.border2}`,
+          borderRadius:8,
+          cursor:'pointer',
+          touchAction:'none',
+          WebkitTapHighlightColor:'transparent',
+          userSelect:'none',
+          overflow:'hidden',
+        }}>
+
+        {/* Zone idéale (méthode active) mise en avant */}
+        <div style={{
+          position:'absolute',
+          left:`${x(ideal[0])}%`,
+          width:`${x(ideal[1])-x(ideal[0])}%`,
+          top:0, bottom:0,
+          background:`linear-gradient(180deg, ${mc}38 0%, ${mc}22 100%)`,
+          borderLeft:`2px solid ${mc}`,
+          borderRight:`2px solid ${mc}`,
+          boxShadow:`0 0 18px ${mc}66 inset`,
+        }}/>
+
+        {/* Graduations tous les 200µm */}
+        {[200,400,600,800,1000,1200].filter(t=>t>totalMin&&t<totalMax).map(t=>(
+          <div key={t} style={{
+            position:'absolute', left:`${x(t)}%`, top:0, bottom:0,
+            width:1, background:T.border, pointerEvents:'none',
+          }}/>
+        ))}
+        {[200,400,600,800,1000,1200].filter(t=>t>totalMin&&t<totalMax).map(t=>(
+          <div key={`${t}-label`} style={{
+            position:'absolute', left:`${x(t)}%`, top:3,
+            transform:'translateX(-50%)', fontFamily:'monospace', fontSize:8,
+            color:T.textMute, pointerEvents:'none',
+          }}>{t}</div>
+        ))}
+
+        {/* Labels min/max aux extrémités */}
+        <div style={{position:'absolute',left:4,bottom:3,fontFamily:'monospace',fontSize:8,color:T.textMute,pointerEvents:'none'}}>{totalMin}</div>
+        <div style={{position:'absolute',right:4,bottom:3,fontFamily:'monospace',fontSize:8,color:T.textMute,pointerEvents:'none'}}>{totalMax}</div>
+
+        {/* Curseur de la valeur actuelle */}
+        <div style={{
+          position:'absolute',
+          left:`${x(value)}%`,
+          top:-4, bottom:-4,
+          width:3,
+          background:mc,
+          transform:'translateX(-50%)',
+          boxShadow:`0 0 14px ${mc}, 0 0 4px ${mc}`,
+          pointerEvents:'none',
+        }}/>
+        {/* Pastille ronde sur le curseur */}
+        <div style={{
+          position:'absolute',
+          left:`${x(value)}%`,
+          top:'50%',
+          width:18, height:18,
+          transform:'translate(-50%,-50%)',
+          background:mc,
+          border:`2px solid ${T.bg2}`,
+          borderRadius:'50%',
+          boxShadow:`0 0 12px ${mc}cc`,
+          pointerEvents:'none',
+        }}/>
+      </div>
+
+      {/* BANDE DES 5 MÉTHODES (mini-visualisation contextuelle) */}
+      <div style={{position:'relative',height:18,background:T.bg3,border:`1px solid ${T.border}`,borderRadius:4,overflow:'hidden'}}>
+        {methodsList.map(({key,range,color})=>{
+          // On clip la méthode à la plage affichée
+          const lo = Math.max(range[0], totalMin)
+          const hi = Math.min(range[1], totalMax)
+          if (hi <= lo) return null
+          return (
+            <div key={key} style={{
+              position:'absolute',
+              left:`${x(lo)}%`, width:`${x(hi)-x(lo)}%`,
+              top:0, bottom:0,
+              background:key===method?color:`${color}33`,
+              borderRight:`1px solid ${T.bg2}`,
+              transition:'background 0.2s',
+            }}/>
+          )
+        })}
+        {/* Curseur sur la bande aussi */}
+        <div style={{
+          position:'absolute',
+          left:`${x(value)}%`,
+          top:0, bottom:0,
+          width:2, background:'#fff',
+          transform:'translateX(-50%)',
+          pointerEvents:'none',
+        }}/>
+      </div>
+
+      {/* LÉGENDE MÉTHODES */}
+      <div style={{display:'flex',flexWrap:'wrap',gap:6,justifyContent:'center'}}>
+        {methodsList.map(({key,label,icon,color})=>(
+          <div key={key} style={{
+            display:'flex', alignItems:'center', gap:4,
+            fontFamily:'monospace', fontSize:10,
+            color:key===method?color:T.textMute,
+            fontWeight:key===method?700:400,
+            padding:'3px 8px',
+            background:key===method?`${color}18`:'transparent',
+            border:`1px solid ${key===method?color+'44':'transparent'}`,
+            borderRadius:3,
+          }}>
+            <span style={{width:8,height:8,background:color,borderRadius:2,display:'inline-block'}}/>
+            <span>{icon} {label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* STATUS BADGE */}
+      <div style={{
+        textAlign:'center',
+        padding:'8px 12px',
+        background:`${statusColor}15`,
+        border:`1px solid ${statusColor}55`,
+        borderRadius:6,
+        fontFamily:'sans-serif',
+        fontSize:13, letterSpacing:'0.15em', fontWeight:700,
+        color:statusColor,
+        textShadow:`0 0 8px ${statusColor}77`,
+      }}>
+        {statusLabel}
+      </div>
+    </div>
+  )
+}
+
+// ─── MINI-TIMELINE : 5 derniers shots du moulin ──────────────────────────────
+function GrindHistoryMini({ history, currentGrind, method, T }) {
+  // On garde les 5 derniers shots du mode 'moulin' avec la même méthode
+  const recent = history.filter(h => h.mode === 'moulin' && h.method === method).slice(0, 5).reverse()
+  if (recent.length < 2) return null
+
+  const all = [...recent.map(h => h.grind), currentGrind]
+  const min = Math.min(...all) - 20
+  const max = Math.max(...all) + 20
+  const range = max - min || 1
+
+  const W = 280, H = 50, PAD = 8
+  const step = recent.length > 0 ? (W - PAD * 2) / recent.length : 0
+
+  return (
+    <div style={{marginTop:14,padding:'10px 12px',background:T.bg3,border:`1px solid ${T.border}`,borderRadius:6}}>
+      <div style={{fontSize:9,letterSpacing:'0.25em',color:T.textMute,textTransform:'uppercase',marginBottom:6}}>
+        Tendance — {recent.length} derniers shots
+      </div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:'block'}}>
+        {/* Ligne zéro (mouture actuelle) */}
+        <line x1={PAD} y1={H/2} x2={W-PAD} y2={H/2} stroke={T.border} strokeWidth="1" strokeDasharray="3,3"/>
+
+        {recent.map((h,i)=>{
+          const xp = PAD + step * i + step / 2
+          const yp = H - PAD - ((h.grind - min) / range) * (H - PAD * 2)
+          const scoreColor = h.score >= 90 ? T.green : h.score >= 70 ? T.gold : T.red
+          return (
+            <g key={h.id}>
+              {/* Ligne vers le suivant */}
+              {i < recent.length - 1 && (() => {
+                const nx = PAD + step * (i+1) + step / 2
+                const ny = H - PAD - ((recent[i+1].grind - min) / range) * (H - PAD * 2)
+                return <line x1={xp} y1={yp} x2={nx} y2={ny} stroke={T.gold} strokeWidth="1.5" opacity="0.5"/>
+              })()}
+              <circle cx={xp} cy={yp} r="3.5" fill={scoreColor}/>
+              <text x={xp} y={H-1} textAnchor="middle" style={{fontFamily:'monospace',fontSize:7,fill:T.textMute}}>{h.grind}</text>
+            </g>
+          )
+        })}
+
+        {/* Valeur actuelle (dernier point en avant) */}
+        <g>
+          <circle cx={W-PAD-step/2 + step} cy={H-PAD-((currentGrind-min)/range)*(H-PAD*2)} r="5" fill={T.gold} opacity="0.9"/>
+          <text x={W-PAD} y={H-1} textAnchor="end" style={{fontFamily:'monospace',fontSize:8,fill:T.gold,fontWeight:700}}>{currentGrind} µm</text>
+        </g>
+      </svg>
+    </div>
+  )
+}
+
+// ─── MODAL CHART PAR MOULIN ──────────────────────────────────────────────────
+function GrinderChartModal({ grinder, onClose, T }) {
+  if (!grinder) return null
+  const methodsList = Object.entries(BREW_METHODS).map(([k,v])=>({
+    key:k, label:v.label, icon:v.icon, µmRange:v.grindRangeµm, settingRange:grinder[k],
+  }))
+  const mColors = { espresso:T.gold, filter:T.blue, aeropress:T.green, chemex:T.purple, moka:T.orange }
+  const W = 340, BAR_H = 26, GAP = 8, PAD_L = 90
+  const H = methodsList.length * (BAR_H + GAP) + 40
+  const totalMin = grinder.minµm, totalMax = grinder.maxµm
+  const span = totalMax - totalMin
+  const xScale = v => PAD_L + ((v - totalMin) / span) * (W - PAD_L - 10)
+
+  // Ticks
+  const niceTicks = (() => {
+    const step = span > 800 ? 200 : span > 400 ? 100 : 50
+    const out = []
+    for (let t = Math.ceil(totalMin / step) * step; t <= totalMax; t += step) out.push(t)
+    return out
+  })()
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'#000000ee',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
+      <div style={{background:T.bg2,border:`1px solid ${T.border2}`,borderRadius:12,padding:20,width:'100%',maxWidth:440,maxHeight:'90vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16,gap:12}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.2em',color:T.gold,marginBottom:4}}>{grinder.brand}</div>
+            <div style={{fontSize:16,fontWeight:700,color:T.text}}>{grinder.label}</div>
+            <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:4}}>
+              {grinder.minµm}–{grinder.maxµm}µm{grinder.clicks?` · ${grinder.clicks} ${grinder.unit||'réglages'}`:''}
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:'transparent',border:`1px solid ${T.border}`,color:T.textDim,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:18,lineHeight:1,touchAction:'manipulation'}}>×</button>
+        </div>
+
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:'block'}}>
+          {/* Ticks verticaux */}
+          {niceTicks.map(t=>(
+            <g key={t}>
+              <line x1={xScale(t)} y1={20} x2={xScale(t)} y2={H-12} stroke={T.border} strokeWidth="0.5" strokeDasharray="2,3"/>
+              <text x={xScale(t)} y={14} textAnchor="middle" style={{fontFamily:'monospace',fontSize:8,fill:T.textMute}}>{t}</text>
+            </g>
+          ))}
+
+          {/* Barres méthodes */}
+          {methodsList.map((m,i)=>{
+            if (!m.µmRange) return null
+            const y = 24 + i * (BAR_H + GAP)
+            const x1 = xScale(m.µmRange[0])
+            const x2 = xScale(m.µmRange[1])
+            const bw = x2 - x1
+            const color = mColors[m.key] || T.gold
+            const hasSetting = m.settingRange && grinder.unit
+            return (
+              <g key={m.key}>
+                {/* Label gauche */}
+                <text x={PAD_L-6} y={y+BAR_H/2+3} textAnchor="end" style={{fontFamily:'monospace',fontSize:10,fill:color,fontWeight:700}}>
+                  {m.icon} {m.label}
+                </text>
+                {/* Barre plage µm */}
+                <rect x={x1} y={y} width={bw} height={BAR_H} rx="3" fill={color} opacity="0.7"/>
+                {/* Valeurs µm dans la barre */}
+                <text x={x1+4} y={y+BAR_H/2-1} style={{fontFamily:'monospace',fontSize:8,fill:'#fff',opacity:0.95}}>{m.µmRange[0]}</text>
+                {bw > 40 && <text x={x2-4} y={y+BAR_H/2-1} textAnchor="end" style={{fontFamily:'monospace',fontSize:8,fill:'#fff',opacity:0.95}}>{m.µmRange[1]}</text>}
+                {/* Réglage natif */}
+                {hasSetting && (
+                  <text x={x1+bw/2} y={y+BAR_H/2+9} textAnchor="middle" style={{fontFamily:'monospace',fontSize:9,fill:'#fff',fontWeight:700}}>
+                    {grinder.unit} {m.settingRange[0]}–{m.settingRange[1]}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+
+        <div style={{marginTop:12,fontFamily:'monospace',fontSize:9,color:T.textMute,lineHeight:1.5}}>
+          Plages recommandées en µm avec les réglages natifs du moulin.<br/>
+          Données : honestcoffeeguide.com
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── TAB MOULIN ───────────────────────────────────────────────────────────────
+function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, notes, setNotes, portafilterType, setPortafilterType, T }) {
+  const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
+  const [resetConfirm,setResetConfirm]=useState(false)
+  const [grindValue,setGrindValue]=useState(0)
+  const [showChart,setShowChart]=useState(false),[showGuide,setShowGuide]=useState(false)
+  const [showGrinderChart,setShowGrinderChart]=useState(false)
+  const [grindMode,setGrindMode]=useState('µm')
+  const [clicksManual,setClicksManual]=useState(20)
+  const [liveWeight,setLiveWeight]=useState(0),[liveWeightOpen,setLiveWeightOpen]=useState(false)
+  const [showInvaders,setShowInvaders]=useState(false)
+  const titleClickRef=useRef({count:0,lastTime:0})
+  const onTitleClick=()=>{
+    const now=Date.now(),ref=titleClickRef.current
+    if(now-ref.lastTime>1500)ref.count=0
+    ref.count++;ref.lastTime=now
+    if(ref.count>=7){ref.count=0;setShowInvaders(true)}
+  }
+
+  const m=BREW_METHODS[method]
+  const mColors={espresso:T.gold,filter:T.blue,aeropress:T.green,chemex:T.purple,moka:T.orange}
+  const mc=mColors[method]||T.gold
+  const g=GRINDERS[grinderId]
+  const clickVal=µmToSetting(grind,g)
+
+  const moulinFirstRender=useRef(true)
+  useEffect(()=>{
+    if(moulinFirstRender.current){moulinFirstRender.current=false;return}
+    setGrind(BREW_METHODS[method].grindBaseµm);setFeedback(null);setLiveWeight(0)
+  },[method])
+
+  const result=computeDialIn({method,doseG:dose,yieldG:yld,extractionTimeSec:time,currentGrindµm:grind})
+  const targetWeight=Math.round(dose*(m.targetRatioMin+m.targetRatioMax)/2)
+  const liveW=liveWeight>0?liveWeight:yld
+  const ratioProgress=Math.min((liveW/dose)/((m.targetRatioMin+m.targetRatioMax)/2)*100,100)
+  const ratioColor=ratioProgress>=95?T.green:ratioProgress>=80?T.orange:T.red
+
+  const doTaste=taste=>{
+    const fb=computeTasteGrind({taste,method,doseG:dose,yieldG:yld,currentGrindµm:grind},T)
+    if(!fb)return;setFlash(taste);setTimeout(()=>setFlash(null),1000);setFeedback(fb)
+    onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,taste,score:taste==='perfect'?100:(result?.score??0),coffee:{...coffee},notes:{...notes}})
+    if(taste!=='perfect'){setGrind(fb.newGrind);if(fb.newYield!==yld)setYld(fb.newYield)}
+  }
+  const applyResult=()=>{
+    if(!result)return
+    onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,score:result.score,coffee:{...coffee},notes:{...notes}})
+    setGrind(result.newGrind)
+  }
+  const doSaveNotes=()=>onSave({mode:'moulin',method,dose,yld,time,grind,grinderId,grindValue,score:result?.score??0,coffee:{...coffee},notes:{...notes}})
+  const dirColor=result?.dir==='finer'?T.blue:result?.dir==='coarser'?T.orange:T.green
+  const hasConflict=result&&feedback&&feedback.taste!=='perfect'&&(
+    (result.dir==='finer'&&feedback.taste==='bitter')||(result.dir==='coarser'&&feedback.taste==='acid')
+  )
+
+  return (<>
+    {showChart&&<GrindChartModal onClose={()=>setShowChart(false)} T={T}/>}
+    {showGuide&&<GuideModal mode="moulin" onClose={()=>setShowGuide(false)} T={T}/>}
+    {liveWeightOpen&&<NumPad label="Poids en tasse" unit="g" initial={liveWeight>0?liveWeight:yld} min={0} max={500} onConfirm={w=>{setLiveWeight(w);setYld(w);setLiveWeightOpen(false)}} onClose={()=>setLiveWeightOpen(false)} T={T}/>}
+    {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)} T={T}/>}
+
+    {/* Boutons utilitaires */}
+    <div style={{display:'flex',gap:8,marginBottom:16}}>
+      <button onClick={()=>setShowGuide(true)} style={{flex:1,padding:'9px 0',background:T.bg3,border:`1px solid ${T.gold}66`,color:T.gold,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',touchAction:'manipulation'}}>📖 GUIDE</button>
+      <button onClick={()=>setShowChart(true)} style={{flex:1,padding:'9px 0',background:T.bg3,border:`1px solid ${T.blue}66`,color:T.blue,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',touchAction:'manipulation'}}>📊 GRIND CHART</button>
+    </div>
+
+    {/* 1. CAFÉ UTILISÉ */}
+    <CoffeeCard coffee={coffee} setCoffee={setCoffee} T={T}/>
+
+    {/* 2. MÉTHODE D'EXTRACTION */}
+    <div style={card(T)}>
+      <div onClick={onTitleClick} style={{...SL(T),cursor:'pointer',userSelect:'none',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>Méthode d'extraction</div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+        {Object.entries(BREW_METHODS).map(([k,v])=>{
+          const mc2=mColors[k]||T.gold
+          return <button key={k} onClick={()=>setMethod(k)} style={{padding:'8px 12px',border:`1px solid ${method===k?mc2:T.border}`,background:method===k?`${mc2}22`:T.bg,color:method===k?mc2:T.textDim,borderRadius:4,cursor:'pointer',fontSize:13,touchAction:'manipulation',display:'flex',alignItems:'center',gap:6,fontWeight:method===k?700:400}}><span>{v.icon}</span>{v.label}</button>
+        })}
+      </div>
+      <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>{m.description}</div>
+    </div>
+
+    {/* 3. MOULIN */}
+    <GrinderSelector grinderId={grinderId} setGrinderId={setGrinderId} method={method} grindValue={grindValue} setGrindValue={setGrindValue} T={T}/>
+
+    {/* 5. MOUTURE */}
+    <div style={card(T)}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+        <div style={{...SL(T),marginBottom:0}}>
+          Mouture{grinderId!=='none'&&g?` — ${g.label}`:grindMode==='clics'?' — Clics (moulin classique)':' — µm universel'}
+        </div>
+        {grinderId!=='none'&&g&&(
+          <button onClick={()=>setShowGrinderChart(true)} style={{
+            padding:'5px 10px',background:`${T.gold}18`,border:`1px solid ${T.gold}55`,
+            color:T.gold,borderRadius:4,cursor:'pointer',fontSize:10,letterSpacing:'0.1em',
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>📊 CHART</button>
+        )}
+      </div>
+
+      {/* Toggle µm / Clics (visible seulement sans moulin sélectionné) */}
+      {grinderId==='none'&&(
+        <div style={{display:'flex',gap:6,marginBottom:14,justifyContent:'center'}}>
+          {['µm','clics'].map(mode=>(
+            <button key={mode} onClick={()=>setGrindMode(mode)} style={{
+              padding:'6px 18px',borderRadius:4,cursor:'pointer',fontSize:12,letterSpacing:'0.1em',fontWeight:700,
+              border:`1px solid ${grindMode===mode?mc:T.border}`,
+              background:grindMode===mode?`${mc}22`:T.bg,
+              color:grindMode===mode?mc:T.textDim,
+              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+            }}>{mode==='µm'?'µm':'Clics'}</button>
+          ))}
+        </div>
+      )}
+
+      {grinderId==='none'&&grindMode==='clics'?(
+        <>
+          {/* Mode clics manuel — 0 à 100 */}
+          <div style={{display:'flex',alignItems:'baseline',gap:12,justifyContent:'center',marginBottom:14}}>
+            <div style={{fontFamily:'monospace',fontSize:38,fontWeight:300,color:mc,textShadow:`0 0 24px ${mc}66`}}>
+              {clicksManual}<span style={{fontSize:14,color:T.textDim,marginLeft:4}}>clics</span>
+            </div>
+          </div>
+          <div style={{height:8,background:T.bg3,borderRadius:4,overflow:'hidden',marginBottom:14,cursor:'pointer'}}
+            onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setClicksManual(clamp(Math.round(((e.clientX-r.left)/r.width)*100),0,100))}}>
+            <div style={{height:'100%',width:`${clicksManual}%`,background:mc,borderRadius:4,transition:'width 0.15s',boxShadow:`0 0 10px ${mc}88`}}/>
+          </div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
+            <button onClick={()=>setClicksManual(c=>clamp(c-5,0,100))} style={dBtn(mc,T)}>−5</button>
+            <button onClick={()=>setClicksManual(c=>clamp(c-1,0,100))} style={dBtn(mc,T)}>−1</button>
+            <button onClick={()=>setClicksManual(20)} style={{...dBtn(T.textDim,T),fontSize:10}}>↺ 20</button>
+            <button onClick={()=>setClicksManual(c=>clamp(c+1,0,100))} style={dBtn(mc,T)}>+1</button>
+            <button onClick={()=>setClicksManual(c=>clamp(c+5,0,100))} style={dBtn(mc,T)}>+5</button>
+          </div>
+          <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:10,textAlign:'center'}}>
+            0–100 clics · plage générique moulin classique
+          </div>
+        </>
+      ):(
+        <>
+          {/* Mode µm (ou moulin sélectionné) */}
+          <div style={{display:'flex',alignItems:'baseline',gap:12,justifyContent:'center',marginBottom:14,flexWrap:'wrap'}}>
+            <div style={{fontFamily:'monospace',fontSize:38,fontWeight:300,color:mc,textShadow:`0 0 24px ${mc}66`}}>
+              {grind}<span style={{fontSize:14,color:T.textDim,marginLeft:4}}>µm</span>
+            </div>
+            {clickVal!==null&&g&&g.clicks&&(
+              <div style={{fontFamily:'monospace',fontSize:18,color:T.gold,background:`${T.gold}18`,border:`1px solid ${T.gold}55`,borderRadius:5,padding:'4px 12px',fontWeight:700}}>
+                {g.unit} {clickVal}
+              </div>
+            )}
+          </div>
+          <GrindBar value={grind} method={method} grinder={g} onChange={setGrind} T={T}/>
+          <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'center',flexWrap:'wrap'}}>
+            <button onClick={()=>setGrind(g2=>clamp(g2-25,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>−25µm</button>
+            <button onClick={()=>setGrind(g2=>clamp(g2-5,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>−5µm</button>
+            <button onClick={()=>setGrind(m.grindBaseµm)} style={{padding:'8px 14px',border:`2px solid ${T.text}`,background:`${T.text}20`,color:T.text,borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'monospace',fontWeight:700,touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>↺ {m.grindBaseµm}µm</button>
+            <button onClick={()=>setGrind(g2=>clamp(g2+5,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>+5µm</button>
+            <button onClick={()=>setGrind(g2=>clamp(g2+25,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>+25µm</button>
+          </div>
+          <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:10,textAlign:'center'}}>
+            {g?`${g.minµm}–${g.maxµm}µm (plage moulin)`:'100–1400µm (référence universelle)'} · tap la barre pour saisir
+          </div>
+          <GrindHistoryMini history={history} currentGrind={grind} method={method} T={T}/>
+        </>
+      )}
+    </div>
+
+    {/* Modal chart du moulin sélectionné */}
+    {showGrinderChart && g && <GrinderChartModal grinder={g} onClose={()=>setShowGrinderChart(false)} T={T}/>}
+
+    {/* 6+8. ANALYSE D'EXTRACTION — timer + score fusionnés */}
+    <div style={card(T)}>
+      <div style={SL(T)}>Analyse d'extraction</div>
+
+      {/* Dose */}
+      <div style={{marginBottom:14}}>
+        <NumIn label="Dose" val={dose} set={setDose} unit="g" min={5} max={40} color={mc} T={T}/>
+        {method==='espresso'&&(
+          <div style={{display:'flex',gap:6,marginTop:8,justifyContent:'center'}}>
+            {[['single','◉ Single'],['double','◉◉ Double']].map(([type,label])=>(
+              <button key={type} onClick={()=>setPortafilterType(portafilterType===type?null:type)} style={{
+                padding:'5px 14px',borderRadius:4,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',
+                border:`1px solid ${portafilterType===type?mc:T.border}`,
+                background:portafilterType===type?`${mc}22`:T.bg,
+                color:portafilterType===type?mc:T.textDim,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                transition:'all 0.15s',fontWeight:portafilterType===type?700:400,
+              }}>{label}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}>
+        <div style={{flex:1}}>
+          <Timer running={timerRunning} elapsed={timerElapsed} onStart={timerStart} onPause={timerPause} onReset={timerReset} T={T}/>
+        </div>
+        <button onClick={()=>setLiveWeightOpen(true)} style={{
+          flex:1,padding:'12px 8px',background:liveWeight>0?`${ratioColor}18`:T.bg3,
+          border:`2px solid ${liveWeight>0?ratioColor:T.border}`,borderRadius:8,
+          color:liveWeight>0?ratioColor:T.textMute,cursor:'pointer',textAlign:'center',
+          touchAction:'manipulation',WebkitTapHighlightColor:'transparent',transition:'all 0.2s',
+          boxShadow:liveWeight>0?`0 0 16px ${ratioColor}44`:'none',
+        }}>
+          <div style={{fontSize:9,letterSpacing:'0.25em',textTransform:'uppercase',marginBottom:4,color:liveWeight>0?ratioColor:T.textMute}}>POIDS TASSE</div>
+          <div style={{fontFamily:'monospace',fontSize:32,fontWeight:300,lineHeight:1,textShadow:liveWeight>0?`0 0 20px ${ratioColor}66`:'none'}}>
+            {liveW}<span style={{fontSize:12,marginLeft:3}}>g</span>
+          </div>
+          <div style={{fontSize:9,color:T.textMute,marginTop:4}}>tap pour modifier</div>
+        </button>
+      </div>
+
+      {/* Barre ratio live */}
+      <div style={{marginBottom:12}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:6}}>
+          <span style={{fontFamily:'monospace',fontSize:14,color:ratioColor,fontWeight:700}}>
+            1:{(liveW/dose).toFixed(2)}
+          </span>
+          <span style={{fontFamily:'monospace',fontSize:10,color:T.textMute}}>
+            cible 1:{m.targetRatioMin}–1:{m.targetRatioMax} · {targetWeight}g
+          </span>
+        </div>
+        <div style={{height:7,background:T.bg3,borderRadius:4,overflow:'hidden'}}>
+          <div style={{height:'100%',width:`${ratioProgress}%`,background:ratioColor,borderRadius:4,transition:'width 0.3s',boxShadow:`0 0 10px ${ratioColor}88`}}/>
+        </div>
+        <div style={{fontFamily:'monospace',fontSize:10,color:ratioColor,marginTop:5,textAlign:'right'}}>
+          {ratioProgress>=95?'✓ Dans la cible':liveW<targetWeight?`→ encore ${targetWeight-liveW}g`:'✓ Cible atteinte'}
+        </div>
+      </div>
+
+      <div style={{marginTop:4}}><NumIn label="Saisie manuelle (s)" val={time} set={setTime} unit="s" min={5} max={600} color={T.textDim} T={T}/></div>
+      <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>cible {formatTime(m.targetTimeMin)}–{formatTime(m.targetTimeMax)}</div>
+      <Bar pct={(time/m.targetTimeMax)*100} color={time>=m.targetTimeMin&&time<=m.targetTimeMax?T.green:T.red} T={T}/>
+      {result&&(<>
+        <div style={{borderTop:`1px solid ${T.border}`,margin:'16px 0'}}/>
+        {hasConflict&&(
+          <div style={{background:`${T.orange}18`,border:`1px solid ${T.orange}55`,borderRadius:6,padding:'10px 12px',marginBottom:12}}>
+            <div style={{fontFamily:'monospace',fontSize:11,fontWeight:700,color:T.orange,marginBottom:4}}>⚠ Conflit détecté</div>
+            <div style={{fontFamily:'monospace',fontSize:10,color:T.textDim,lineHeight:1.5}}>
+              {result.dir==='coarser'&&feedback?.taste==='acid'
+                ?'Le ratio/temps suggère de grossir la mouture, mais le ressenti indique sous-extraction. Priorité au ressenti : vérifiez distribution et tassage avant d\'ajuster.'
+                :'Le ratio/temps suggère d\'affiner la mouture, mais le ressenti indique sur-extraction. Priorité au ressenti : vérifiez la température d\'extraction.'}
+            </div>
+          </div>
+        )}
+        <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',marginBottom:14}}>
+          <ScoreRing score={result.score} T={T}/>
+          <div>
+            <div style={{fontFamily:'monospace',fontSize:11,color:T.textDim,marginBottom:6}}>Ratio 1:{result.ratio.toFixed(1)} · {formatTime(time)}</div>
+            <Bar2 label="Ratio" v={result.ratioScore} T={T}/>
+            <Bar2 label="Temps" v={result.timeScore} T={T}/>
+          </div>
+        </div>
+        {result.isPerfect
+          ?<div style={{fontSize:18,color:T.green,letterSpacing:'0.1em',fontWeight:700}}>✓ EXTRACTION PARFAITE</div>
+          :<>
+            <div style={{fontSize:22,fontWeight:700,color:hasConflict?T.orange:dirColor,textShadow:`0 0 14px ${hasConflict?T.orange:dirColor}88`,marginBottom:8}}>
+              {result.dir==='finer'?'← PLUS FIN':'→ PLUS GROSSIER'} · {result.newGrind}µm
+              {clickVal!==null&&g?.clicks&&<span style={{fontSize:14,color:T.gold,marginLeft:10}}>(~{g.unit} {µmToSetting(result.newGrind,g)})</span>}
+            </div>
+            <div style={{fontFamily:'monospace',fontSize:11,color:T.textDim,marginBottom:10}}>
+              {grind}µm → {result.newGrind}µm ({result.grindDelta>0?'+':''}{result.grindDelta}µm · {result.steps} clics)
+            </div>
+            {result.reasons.map((r,i)=>(
+              <div key={i} style={{fontFamily:'monospace',fontSize:10,color:T.textDim,background:T.bg,border:`1px solid ${T.border}`,padding:'5px 10px',borderRadius:3,display:'block',marginBottom:5}}>{r}</div>
+            ))}
+            {!hasConflict&&<button onClick={applyResult} style={{marginTop:12,padding:'13px 20px',border:`1px solid ${mc}`,background:`${mc}22`,color:mc,borderRadius:4,cursor:'pointer',fontSize:13,letterSpacing:'0.1em',fontWeight:700,width:'100%',touchAction:'manipulation'}}>⬤ APPLIQUER → {result.newGrind}µm</button>}
+          </>
+        }
+      </>)}
+    </div>
+
+    {/* 7. RESSENTI EN TASSE */}
+    <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
+
+    {/* 7b. NOTES DE DÉGUSTATION */}
+    <TastingNotes notes={notes} setNotes={setNotes} onSave={doSaveNotes} T={T}/>
+
+    {/* RESET CALIBRATION */}
+    <div style={{marginTop:8,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
+      {!resetConfirm
+        ?<button onClick={()=>{setResetConfirm(true);setTimeout(()=>setResetConfirm(false),3000)}} style={{width:'100%',padding:'11px 0',background:`${T.red}12`,border:`1px solid ${T.red}88`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.2em',fontWeight:600,touchAction:'manipulation'}}>↺ RESET CALIBRATION</button>
+        :<div style={{display:'flex',gap:8}}>
+          <button onClick={()=>setResetConfirm(false)} style={{flex:1,padding:'11px 0',background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',touchAction:'manipulation'}}>ANNULER</button>
+          <button onClick={()=>{setFeedback(null);setFlash(null);setLiveWeight(0);setResetConfirm(false);onReset()}} style={{flex:1,padding:'11px 0',background:`${T.red}22`,border:`1px solid ${T.red}`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',fontWeight:700,touchAction:'manipulation'}}>CONFIRMER RESET</button>
+        </div>
+      }
+    </div>
+  </>)
+}
+
+// ─── EASTER EGG : COFFEE INVADERS (∞ progressive) ────────────────────────────
+const INVADERS_HISCORE_KEY = 'torrea_invaders_hiscore'
+const INVADERS_CONTROL_KEY = 'torrea_invaders_control'
+const INVADERS_SOUND_KEY = 'torrea_invaders_sound'
+const INVADERS_DIFFICULTY_KEY = 'torrea_invaders_difficulty'
+const INVADERS_ACHIEVEMENTS_KEY = 'torrea_invaders_achievements'
+const INVADERS_GOLDEN_KEY = 'torrea_invaders_golden'
+
+const ACHIEVEMENTS = [
+  { id:'first_blood', label:'First Coffee', desc:'Terminer la vague 1', icon:'☕', color:'#7acca0' },
+  { id:'combo_king', label:'Super Shot', desc:'Atteindre combo ×10', icon:'🔥', color:'#e0a030' },
+  { id:'bomb_squad', label:'Caffeine Bomb', desc:'Tuer un boss avec une bombe', icon:'💣', color:'#d47a7a' },
+  { id:'untouchable', label:'Untouchable', desc:'Finir une vague sans dégât', icon:'🛡', color:'#7ab0e0' },
+  { id:'wave_10', label:'Wave 10', desc:'Atteindre la vague 10', icon:'👑', color:'#d4b040' },
+  { id:'speed_drinker', label:'Speed Drinker', desc:'Tuer 3 ennemis en 1 seconde', icon:'⚡', color:'#c0a0e0' },
+  { id:'golden_boy', label:'Golden Espresso', desc:'Activer le skin doré secret', icon:'✨', color:'#d4b040' },
+]
+
+// ── Audio mini-engine (lazy init) ──
+let _audioCtx = null
+const audioCtx = () => {
+  if(_audioCtx) return _audioCtx
+  try { _audioCtx = new (window.AudioContext||window.webkitAudioContext)() } catch { _audioCtx = null }
+  return _audioCtx
+}
+const playTone = (freq, dur=0.06, type='square', vol=0.08, slide=null) => {
+  const ctx = audioCtx(); if(!ctx) return
+  try {
+    const o = ctx.createOscillator(), g = ctx.createGain()
+    o.type = type; o.frequency.setValueAtTime(freq, ctx.currentTime)
+    if(slide!=null) o.frequency.exponentialRampToValueAtTime(Math.max(40,slide), ctx.currentTime+dur)
+    g.gain.setValueAtTime(vol, ctx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur)
+    o.connect(g); g.connect(ctx.destination)
+    o.start(); o.stop(ctx.currentTime+dur)
+  } catch {}
+}
+
+function CoffeeInvaders({ onClose, T }) {
+  const canvasRef = useRef(null)
+  const [status, setStatus] = useState('menu')
+  const [finalScore, setFinalScore] = useState(0)
+  const [finalWave, setFinalWave] = useState(1)
+  const [gameKey, setGameKey] = useState(0)
+  const [hiscore, setHiscore] = useState(() => {
+    try { const s = localStorage.getItem(INVADERS_HISCORE_KEY); return s ? JSON.parse(s) : {score:0,wave:0} } catch { return {score:0,wave:0} }
+  })
+  const [isNewRecord, setIsNewRecord] = useState(false)
+  const [controlMode, setControlMode] = useState(() => {
+    try { return localStorage.getItem(INVADERS_CONTROL_KEY) || 'buttons' } catch { return 'buttons' }
+  })
+  const [autoFire, setAutoFire] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const [soundOn, setSoundOn] = useState(() => {
+    try { return localStorage.getItem(INVADERS_SOUND_KEY) !== '0' } catch { return true }
+  })
+  const [difficulty, setDifficulty] = useState(() => {
+    try { return localStorage.getItem(INVADERS_DIFFICULTY_KEY) || 'normal' } catch { return 'normal' }
+  })
+  const [achievements, setAchievements] = useState(() => {
+    try { const s = localStorage.getItem(INVADERS_ACHIEVEMENTS_KEY); return s ? JSON.parse(s) : [] } catch { return [] }
+  })
+  const [achPopup, setAchPopup] = useState(null)
+  const [goldenSkin, setGoldenSkin] = useState(() => {
+    try { return localStorage.getItem(INVADERS_GOLDEN_KEY) === '1' } catch { return false }
+  })
+  const touchRef = useRef({ left:false, right:false, fire:false, autoFire:false, dragging:false, targetX:null })
+  useEffect(() => { touchRef.current.autoFire = autoFire }, [autoFire])
+  const themeRef = useRef(T)
+  const hiscoreRef = useRef(hiscore)
+  const controlModeRef = useRef(controlMode)
+  const pausedRef = useRef(paused)
+  const soundOnRef = useRef(soundOn)
+  const difficultyRef = useRef(difficulty)
+  const achRef = useRef(achievements)
+  const goldenSkinRef = useRef(goldenSkin)
+  const scoreTapRef = useRef({ count:0, lastTime:0 })
+  const bgBeatRef = useRef(null)
+  const achPopupTimerRef = useRef(null)
+  const dangerRef = useRef(false)
+  useEffect(() => { themeRef.current = T }, [T])
+  useEffect(() => { hiscoreRef.current = hiscore }, [hiscore])
+  useEffect(() => {
+    controlModeRef.current = controlMode
+    try { localStorage.setItem(INVADERS_CONTROL_KEY, controlMode) } catch {}
+  }, [controlMode])
+  useEffect(() => { pausedRef.current = paused }, [paused])
+  useEffect(() => {
+    soundOnRef.current = soundOn
+    try { localStorage.setItem(INVADERS_SOUND_KEY, soundOn?'1':'0') } catch {}
+  }, [soundOn])
+  useEffect(() => {
+    difficultyRef.current = difficulty
+    try { localStorage.setItem(INVADERS_DIFFICULTY_KEY, difficulty) } catch {}
+  }, [difficulty])
+  useEffect(() => { achRef.current = achievements }, [achievements])
+  useEffect(() => { goldenSkinRef.current = goldenSkin }, [goldenSkin])
+  // Helper son qui respecte le toggle
+  const sfx = (...args) => { if(soundOnRef.current) playTone(...args) }
+
+  useEffect(() => {
+    if(gameKey === 0) return
+    const canvas = canvasRef.current
+    if(!canvas) return
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width, H = canvas.height
+
+    const player = { x: W/2 - 18, y: H - 44, w: 36, h: 26, speed: 3.4, shield: 0, invincible: 0 }
+    let bullets = []
+    let enemyBullets = []
+    let enemies = []
+    let particles = []
+    let powerups = []
+    let floatingTexts = []
+
+    let wave = 0
+    let score = 0
+    let combo = 0
+    let comboTimer = 0
+    let dirX = 1
+    let frame = 0
+    let lastShot = -100
+    let lastEnemyShot = 0
+    let alive = true
+    let waveTransitionTimer = 0
+    let waveAnnounceText = ''
+    let waveAnnounceTimer = 0
+    const pu = { double:0, triple:0, rapid:0, x2:0 }
+    // Difficulté : easy = 4 vies + ennemis plus lents, normal = 3, hard = 2 + ennemis plus rapides
+    const diffMap = { easy:{lives:4, speed:0.85}, normal:{lives:3, speed:1.0}, hard:{lives:2, speed:1.2} }
+    const diff = diffMap[difficultyRef.current]||diffMap.normal
+    let lives = diff.lives
+    let shake = 0
+    let flashScreen = 0
+    let lastKillTimes = []
+    let prevHits = 0
+    const triggerShake = (n) => { shake = Math.max(shake, n) }
+
+    const rand = (a,b) => a + Math.random()*(b-a)
+
+    const pickType = (w, row) => {
+      const r = Math.random()
+      if(w >= 12 && row === 0 && r < 0.30) return 'shielder'
+      if(w >= 10 && row === 0 && r < 0.30) return 'tank'
+      if(w >= 8 && r < 0.20) return 'teleporter'
+      if(w >= 7 && r < 0.25) return 'zigzag'
+      if(w >= 5 && r < 0.20) return 'splitter'
+      if(w >= 4 && r < 0.22) return 'fast'
+      return 'basic'
+    }
+
+    const startNextWave = () => {
+      wave++
+      enemies = []
+      enemyBullets = []
+      bullets = []
+      dirX = 1
+      prevHits = 0
+      const isBoss = wave % 5 === 0
+      if(isBoss) {
+        const hp = 12 + wave*3
+        enemies.push({
+          x: W/2 - 55, y: 50, w: 110, h: 50, alive: true,
+          type: 'boss', hp, maxHp: hp,
+          vx: 1.4 + wave*0.06, lastShot: 0, pattern: 0,
+        })
+        waveAnnounceText = `☕ BOSS — VAGUE ${wave}`
+        sfx(165, 0.30, 'sawtooth', 0.10, 80)
+      } else {
+        sfx(550, 0.10, 'square', 0.06, 880)
+        const cols = Math.min(8, 4 + Math.floor((wave-1)/2))
+        const rows = Math.min(5, 2 + Math.floor((wave-1)/3))
+        const eW = 26, eH = 20, gap = 6
+        const fieldW = cols*(eW+gap) - gap
+        const startX = Math.floor((W - fieldW)/2)
+        for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+          const type = pickType(wave, r)
+          enemies.push({
+            x: startX+c*(eW+gap), y: 38+r*(eH+gap),
+            w:eW, h:eH, alive:true, row:r, col:c,
+            type, hp: type==='tank'||type==='splitter'?2:1,
+            shield: type==='shielder',
+            mini: false,
+            wobble: c*0.3, zigPhase: rand(0, Math.PI*2),
+            teleTimer: rand(0, 120),
+          })
+        }
+        waveAnnounceText = `VAGUE ${wave}`
+      }
+      waveAnnounceTimer = 75
+    }
+
+    const spawnPowerup = (x, y) => {
+      const types = ['double','triple','rapid','x2','shield','bomb']
+      // Bombe plus rare
+      const r = Math.random()
+      const t = r < 0.10 ? 'bomb' : types[Math.floor(Math.random()*5)]
+      powerups.push({ x: x-7, y, w:14, h:14, vy:1.5, type: t, age:0 })
+    }
+
+    const spawnParticles = (x, y, color, count=8) => {
+      for(let i=0;i<count;i++) particles.push({
+        x, y, vx: rand(-2.5,2.5), vy: rand(-2.5,2.5), life: 24, color
+      })
+    }
+
+    const floatText = (x, y, text, color) => {
+      floatingTexts.push({ x, y, text, color, life: 50 })
+    }
+
+    const applyPowerup = (t) => {
+      const TT = themeRef.current
+      if(t === 'double') { pu.double = 540; floatText(player.x+player.w/2, player.y-10, 'DOUBLE', TT.blue); sfx(880, 0.12, 'triangle', 0.06, 1320) }
+      else if(t === 'triple') { pu.triple = 540; floatText(player.x+player.w/2, player.y-10, 'TRIPLE', TT.purple); sfx(990, 0.14, 'triangle', 0.06, 1480) }
+      else if(t === 'rapid') { pu.rapid = 540; floatText(player.x+player.w/2, player.y-10, 'RAPID', TT.gold); sfx(660, 0.10, 'triangle', 0.06, 1100) }
+      else if(t === 'x2') { pu.x2 = 540; floatText(player.x+player.w/2, player.y-10, 'SCORE ×2', TT.green); sfx(550, 0.16, 'triangle', 0.06, 1100) }
+      else if(t === 'shield') { player.shield = 1; floatText(player.x+player.w/2, player.y-10, 'SHIELD', TT.blue); sfx(440, 0.14, 'triangle', 0.06, 880) }
+      else if(t === 'bomb') {
+        // Détruit tous les ennemis non-boss + clear bullets ennemis
+        floatText(W/2, H/2-20, '💥 BOMB', TT.red)
+        triggerShake(18)
+        sfx(110, 0.35, 'sawtooth', 0.12, 40)
+        for(const e of enemies){
+          if(!e.alive) continue
+          if(e.type === 'boss'){
+            e.hp = Math.max(0, e.hp - 4)
+            spawnParticles(e.x+e.w/2, e.y+e.h/2, TT.red, 14)
+            if(e.hp <= 0) { e.alive = false; gainScore(150+wave*15); spawnParticles(e.x+e.w/2, e.y+e.h/2, TT.gold, 30); awardAch('bomb_squad') }
+          } else {
+            e.alive = false
+            const isLight2 = TT === LIGHT
+            const altPalette = isLight2
+              ? { basic:'#3a8a60', fast:'#2a7aaa', zigzag:'#aa5530', tank:'#6a4aaa' }
+              : { basic:'#7acca0', fast:'#a8d4f0', zigzag:'#e0a878', tank:'#a888d4' }
+            spawnParticles(e.x+e.w/2, e.y+e.h/2, altPalette[e.type]||TT.red, 6)
+            const pts = e.type==='tank'?25:(e.type==='zigzag'?20:(e.type==='fast'?30:10))
+            gainScore(Math.round(pts*0.5)) // demi-points pour ne pas exploit
+          }
+        }
+        enemyBullets = []
+        bumpCombo()
+      }
+    }
+
+    const fireBullet = () => {
+      const cx = player.x + player.w/2 - 3
+      const y = player.y - 4
+      if(pu.triple > 0) {
+        bullets.push({ x:cx, y, w:6, h:8, vx:0, vy:-7 })
+        bullets.push({ x:cx-2, y, w:6, h:8, vx:-1.4, vy:-6.6 })
+        bullets.push({ x:cx+2, y, w:6, h:8, vx:1.4, vy:-6.6 })
+      } else if(pu.double > 0) {
+        bullets.push({ x:cx-7, y, w:6, h:8, vx:0, vy:-7 })
+        bullets.push({ x:cx+7, y, w:6, h:8, vx:0, vy:-7 })
+      } else {
+        bullets.push({ x:cx, y, w:6, h:8, vx:0, vy:-7 })
+      }
+      sfx(880, 0.04, 'square', 0.04)
+    }
+
+    const comboMult = () => 1 + Math.min(combo, 20)*0.05
+    const gainScore = (pts) => {
+      const m = (pu.x2 > 0 ? 2 : 1) * comboMult()
+      score += Math.round(pts * m)
+    }
+    const bumpCombo = () => { combo++; comboTimer = 150 }
+
+    // takeDamage : retire 1 vie. Si vies > 0 → invincibilité 90 frames, sinon vraie mort.
+    let takeDamage = () => {
+      if(player.invincible > 0) return false
+      prevHits++
+      const TT = themeRef.current
+      lives--
+      triggerShake(10)
+      sfx(220, 0.18, 'triangle', 0.10, 110)
+      spawnParticles(player.x+player.w/2, player.y+player.h/2, TT.red, 18)
+      floatText(player.x+player.w/2, player.y-12, '-1 ❤', TT.red)
+      if(lives <= 0){ doDie(); return true }
+      // Sinon, invincibilité + clear enemy bullets pour donner de l'air
+      player.invincible = 90
+      enemyBullets = []
+      combo = 0; comboTimer = 0
+      return false
+    }
+    const doDie = () => {
+      alive = false
+      sfx(330, 0.5, 'sawtooth', 0.12, 50)
+      setFinalScore(score)
+      setFinalWave(wave)
+      setAutoFire(false)
+      const cur = hiscoreRef.current
+      if(score > cur.score) {
+        const next = { score, wave }
+        setHiscore(next)
+        setIsNewRecord(true)
+        try { localStorage.setItem(INVADERS_HISCORE_KEY, JSON.stringify(next)) } catch {}
+      } else {
+        setIsNewRecord(false)
+      }
+      setStatus('lost')
+      draw()
+    }
+    // Compat alias — utilisé par la boucle quand les ennemis atteignent le joueur
+    const die = doDie
+
+    const awardAch = (achId) => {
+      if(achRef.current.includes(achId)) return
+      const a = ACHIEVEMENTS.find(x=>x.id===achId)
+      if(!a) return
+      const next = [...achRef.current, achId]
+      achRef.current = next
+      setAchievements(next)
+      try { localStorage.setItem(INVADERS_ACHIEVEMENTS_KEY, JSON.stringify(next)) } catch {}
+      setAchPopup({ id:achId })
+      achPopupTimerRef.current = 120
+      spawnParticles(W/2, H/2-30, a.color, 20)
+      floatText(W/2, H/2, a.icon+' '+a.label, a.color)
+      sfx(880, 0.08, 'triangle', 0.08, 1320)
+      try { navigator.vibrate?.([20,40,20,40,60]) } catch {}
+    }
+
+    const checkAchievements = () => {
+      if(wave >= 2) awardAch('first_blood')
+      if(combo >= 10) awardAch('combo_king')
+      if(wave >= 10) awardAch('wave_10')
+      if(lastKillTimes.length >= 3 && lastKillTimes[lastKillTimes.length-1] - lastKillTimes[0] < 60) {
+        awardAch('speed_drinker')
+      }
+      if(waveTransitionTimer === 1 && lives === diff.lives && prevHits === 0) {
+        awardAch('untouchable')
+      }
+      if(goldenSkinRef.current) awardAch('golden_boy')
+    }
+
+    // Track hits for untouchable
+    const origTakeDamage = takeDamage
+    takeDamage = () => { prevHits++; return origTakeDamage() }
+
+    const keys = {}
+    const onKeyDown = e => {
+      if(e.key === 'Escape') { onClose(); return }
+      if(e.key === 'p' || e.key === 'P') { setPaused(p=>!p); return }
+      if(['ArrowLeft','ArrowRight','a','d',' '].includes(e.key)) e.preventDefault()
+      keys[e.key.toLowerCase()] = true
+    }
+    const onKeyUp = e => { keys[e.key.toLowerCase()] = false }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+
+    const drawCup = (x, y, w, h, body, liquid) => {
+      ctx.fillStyle = body
+      ctx.fillRect(x+2, y+4, w-4, h-8)
+      ctx.fillStyle = liquid
+      ctx.fillRect(x+4, y+6, w-8, 3)
+      ctx.fillStyle = body
+      ctx.fillRect(x+w-2, y+9, 3, 6)
+      ctx.fillRect(x, y+h-3, w, 2)
+    }
+
+    const draw = () => {
+      const TT = themeRef.current
+      const isLight = TT === LIGHT
+      const enemyColors = isLight ? {
+        basic:  ['#3a8a60','#1a4a30'],
+        fast:   ['#2a7aaa','#0a3060'],
+        zigzag: ['#aa5530','#5a2010'],
+        tank:   ['#6a4aaa','#2a0a60'],
+        splitter: ['#d08030','#6a3010'],
+        shielder: ['#4a80aa','#1a3050'],
+        teleporter: ['#8a4aaa','#3a1060'],
+      } : {
+        basic:  ['#7acca0','#3a8a60'],
+        fast:   ['#a8d4f0','#3a6090'],
+        zigzag: ['#e0a878','#8a4030'],
+        tank:   ['#a888d4','#5a3088'],
+        splitter: ['#f0a040','#b05010'],
+        shielder: ['#7ab0e0','#2a6090'],
+        teleporter: ['#b888e0','#5a2090'],
+      }
+      // Reset transform avant tout (au cas où shake précédent)
+      ctx.setTransform(1,0,0,1,0,0)
+      // Background with danger tint
+      const danger = dangerRef.current
+      const bgR = danger ? 40 : 0
+      ctx.fillStyle = danger ? `rgb(${20+bgR},${12},${12})` : TT.inputBg
+      ctx.fillRect(0,0,W,H)
+      // Apply screen shake offset après le bg
+      if(shake > 0) {
+        const sx = (Math.random()-0.5) * shake * 0.8
+        const sy = (Math.random()-0.5) * shake * 0.8
+        ctx.translate(sx, sy)
+      }
+      // Parallax bean dust — 3 layers at different speeds
+      const dustAlpha = danger ? 0.4 : (isLight ? 0.32 : 0.22)
+      const dustColor = danger ? `rgba(220,${80+danger*2},${40+danger*2},${dustAlpha})` : (isLight ? 'rgba(154,110,32,0.32)' : 'rgba(212,176,106,0.22)')
+      ctx.fillStyle = dustColor
+      // Layer 1 (slow, distant)
+      for(let i=0;i<18;i++){
+        const x = (i*89 + frame*0.15) % W
+        const y = (i*157 + frame*0.2) % H
+        ctx.globalAlpha = 0.4
+        ctx.fillRect(x, y, 1, 1)
+      }
+      // Layer 2 (medium)
+      for(let i=0;i<20;i++){
+        const x = (i*73 + frame*0.4) % W
+        const y = (i*131 + frame*0.6) % H
+        ctx.globalAlpha = 0.7
+        ctx.fillRect(x, y, 1.5, 1.5)
+      }
+      // Layer 3 (fast, close — larger particles)
+      for(let i=0;i<10;i++){
+        const x = (i*47 + frame*0.9) % W
+        const y = (i*211 + frame*1.1) % H
+        ctx.globalAlpha = 1
+        ctx.fillRect(x, y, 2.5, 2.5)
+      }
+      ctx.globalAlpha = 1
+      // Danger border pulse
+      if(danger) {
+        const pulse = Math.sin(frame*0.15)*0.5+0.5
+        ctx.strokeStyle = `rgba(220,60,40,${0.3 + pulse*0.5})`
+        ctx.lineWidth = 3
+        ctx.strokeRect(2, 2, W-4, H-4)
+      }
+      // Enemies
+      for(const e of enemies) {
+        if(!e.alive) continue
+        if(e.type === 'boss') {
+          ctx.fillStyle = isLight ? '#aa3a3a' : '#d47a7a'
+          ctx.fillRect(e.x+10, e.y+15, e.w-20, e.h-25)
+          ctx.fillRect(e.x+25, e.y+5, e.w-50, 12)
+          ctx.fillRect(e.x+e.w/2-3, e.y, 6, 8)
+          ctx.fillRect(e.x, e.y+25, 14, 8)
+          ctx.fillRect(e.x+e.w-6, e.y+22, 6, 14)
+          ctx.fillStyle = isLight ? '#5a0a0a' : '#3a0a0a'
+          ctx.fillRect(e.x+14, e.y+18, e.w-28, 2)
+          ctx.fillStyle = isLight ? '#dddded' : '#1a1a24'
+          ctx.fillRect(e.x, e.y-8, e.w, 4)
+          ctx.fillStyle = e.hp/e.maxHp > 0.5 ? TT.green : (e.hp/e.maxHp > 0.25 ? TT.gold : TT.red)
+          ctx.fillRect(e.x, e.y-8, e.w*(e.hp/e.maxHp), 4)
+        } else {
+          const [body, liquid] = enemyColors[e.type] || enemyColors.basic
+          const wob = Math.sin((frame+e.x)*0.05+e.wobble) * 1.5
+          const ex = e.x+wob
+          // Teleporter: ghostly trail + dotted outline
+          if(e.type === 'teleporter') {
+            ctx.globalAlpha = 0.3
+            drawCup(ex-3, e.y-2, e.w+6, e.h+4, body, liquid)
+            ctx.globalAlpha = 0.6
+            drawCup(ex-1, e.y-1, e.w+2, e.h+2, body, liquid)
+            ctx.globalAlpha = 1
+            drawCup(ex, e.y, e.w, e.h, body, liquid)
+            ctx.setLineDash([2, 2])
+            ctx.strokeStyle = body
+            ctx.lineWidth = 1
+            ctx.strokeRect(ex-2, e.y-2, e.w+4, e.h+4)
+            ctx.setLineDash([])
+          } else {
+            drawCup(ex, e.y, e.w, e.h, body, liquid)
+          }
+          if(frame % 24 < 12) {
+            ctx.fillStyle = isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)'
+            ctx.fillRect(ex+10, e.y-3, 2, 3)
+          }
+          if(e.type === 'tank') {
+            ctx.strokeStyle = TT.gold
+            ctx.lineWidth = 1
+            ctx.strokeRect(ex+1, e.y+3, e.w-2, e.h-6)
+          }
+          // Shielder shield arc
+          if(e.shield) {
+            const shAlpha = Math.sin(frame*0.2)*0.3+0.7
+            ctx.strokeStyle = `rgba(100,180,240,${shAlpha})`
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.arc(ex+e.w/2, e.y+e.h/2, e.w/2+4, Math.PI, 0)
+            ctx.stroke()
+          }
+          // Splitter fissure line
+          if(e.type === 'splitter') {
+            ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'
+            ctx.lineWidth = 1
+            ctx.beginPath()
+            ctx.moveTo(ex+e.w/2, e.y+4); ctx.lineTo(ex+e.w/2+2, e.y+e.h-4)
+            ctx.stroke()
+          }
+        }
+      }
+      // Screen flash (boss kill)
+      if(flashScreen > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${flashScreen/28})`
+        ctx.fillRect(0, 0, W, H)
+      }
+      // Player (espresso cup) — clignote pendant invincibilité
+      const blink = player.invincible > 0 && Math.floor(player.invincible/4)%2 === 0
+      const hasGoldSkin = goldenSkinRef.current
+      if(!blink){
+        const cupBody = hasGoldSkin ? '#d4a030' : TT.gold
+        const cupLiquid = hasGoldSkin ? '#5a3a08' : '#3a1a08'
+        const cupRim = hasGoldSkin ? '#e0b840' : (isLight ? '#7a5618' : '#c8a060')
+        // Visual power-up indicators on ship
+        if(pu.double > 0) {
+          // Wider cup for double
+          drawCup(player.x-3, player.y, player.w+6, player.h, cupBody, cupLiquid)
+        } else {
+          drawCup(player.x, player.y, player.w, player.h, cupBody, cupLiquid)
+        }
+        ctx.fillStyle = cupRim
+        ctx.fillRect(player.x+5, player.y+8, player.w-10, 1)
+        // Triple: glowing rim
+        if(pu.triple > 0) {
+          ctx.strokeStyle = TT.purple
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w/2+3, 0, Math.PI*2)
+          ctx.stroke()
+        }
+        // Rapid: pulse outline
+        if(pu.rapid > 0) {
+          const rp = Math.sin(frame*0.3)*0.4+0.6
+          ctx.strokeStyle = `rgba(212,176,64,${rp})`
+          ctx.lineWidth = 2
+          ctx.strokeRect(player.x-2, player.y-2, player.w+4, player.h+4)
+        }
+        // x2: golden halo
+        if(pu.x2 > 0) {
+          const xp = Math.sin(frame*0.25)*0.3+0.7
+          ctx.fillStyle = `rgba(100,200,80,${xp*0.3})`
+          ctx.beginPath()
+          ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w/2+8, 0, Math.PI*2)
+          ctx.fill()
+        }
+        // Golden skin sparkle
+        if(hasGoldSkin && frame % 12 < 6) {
+          ctx.fillStyle = '#ffe8a0'
+          const sx = player.x + rand(2, player.w-4)
+          const sy = player.y + rand(2, player.h-4)
+          ctx.fillRect(sx, sy, 2, 2)
+        }
+      }
+      // Shield halo
+      if(player.shield > 0) {
+        ctx.strokeStyle = TT.blue
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w/2+5, 0, Math.PI*2)
+        ctx.stroke()
+      }
+      // Coffee bean bullets
+      for(const b of bullets) {
+        ctx.fillStyle = isLight ? '#3a1a08' : '#5c3a1a'
+        ctx.beginPath()
+        ctx.ellipse(b.x+b.w/2, b.y+b.h/2, b.w/2, b.h/2, 0, 0, Math.PI*2)
+        ctx.fill()
+        ctx.strokeStyle = isLight ? '#1a0a02' : '#3a1a08'
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(b.x+b.w/2, b.y); ctx.lineTo(b.x+b.w/2, b.y+b.h)
+        ctx.stroke()
+      }
+      // Enemy bullets
+      ctx.fillStyle = TT.green
+      for(const b of enemyBullets) ctx.fillRect(b.x, b.y, b.w, b.h)
+      // Power-ups
+      const puColors = { double:TT.blue, triple:TT.purple, rapid:TT.gold, x2:TT.green, shield:TT.blue, bomb:TT.red }
+      const puLabels = { double:'2', triple:'3', rapid:'R', x2:'×2', shield:'S', bomb:'💥' }
+      for(const p of powerups) {
+        const blink = Math.sin(p.age*0.15)*0.3+0.7
+        ctx.globalAlpha = blink
+        ctx.fillStyle = puColors[p.type] || TT.text
+        ctx.fillRect(p.x, p.y, p.w, p.h)
+        ctx.globalAlpha = 1
+        ctx.fillStyle = isLight ? '#fff' : '#000'
+        ctx.font = 'bold 9px monospace'
+        const lbl = puLabels[p.type] || '?'
+        const tw = ctx.measureText(lbl).width
+        ctx.fillText(lbl, p.x+(p.w-tw)/2, p.y+10)
+      }
+      // Particles
+      for(const p of particles) {
+        ctx.fillStyle = p.color
+        ctx.globalAlpha = p.life/24
+        ctx.fillRect(p.x, p.y, 2, 2)
+      }
+      ctx.globalAlpha = 1
+      // Floating texts
+      for(const ft of floatingTexts) {
+        ctx.globalAlpha = Math.min(1, ft.life/20)
+        ctx.fillStyle = ft.color
+        ctx.font = 'bold 10px monospace'
+        const tw = ctx.measureText(ft.text).width
+        ctx.fillText(ft.text, ft.x - tw/2, ft.y)
+      }
+      ctx.globalAlpha = 1
+      // HUD
+      ctx.fillStyle = TT.gold
+      ctx.font = 'bold 11px monospace'
+      ctx.fillText(`SCORE ${score}`, 8, 16)
+      const wt = `VAGUE ${wave}`
+      const wtw = ctx.measureText(wt).width
+      ctx.fillText(wt, W - wtw - 8, 16)
+      // Lives (cœurs) — en haut à droite, sous la vague (alignés à droite)
+      const heart = '♥'
+      ctx.font = 'bold 13px monospace'
+      const heartW = 13
+      const heartsTotalW = diff.lives * heartW
+      const heartsStartX = W - heartsTotalW - 8
+      for(let i=0;i<diff.lives;i++){
+        ctx.fillStyle = i<lives ? TT.red : (isLight ? '#cccccc' : '#3a3a44')
+        ctx.fillText(heart, heartsStartX + i*heartW, 32)
+      }
+      const hs = hiscoreRef.current
+      if(hs.score > 0) {
+        ctx.fillStyle = TT.textDim
+        ctx.font = 'bold 9px monospace'
+        const ht = `BEST ${hs.score}`
+        ctx.fillText(ht, (W - ctx.measureText(ht).width)/2, 16)
+      }
+      // Combo
+      if(combo > 1) {
+        ctx.fillStyle = TT.green
+        ctx.font = 'bold 10px monospace'
+        ctx.fillText(`COMBO ×${comboMult().toFixed(2)} (${combo})`, 8, 30)
+      }
+      // Active power-ups
+      ctx.font = 'bold 8px monospace'
+      const puArr = []
+      if(pu.double > 0) puArr.push(['DOUBLE', pu.double, TT.blue])
+      if(pu.triple > 0) puArr.push(['TRIPLE', pu.triple, TT.purple])
+      if(pu.rapid > 0) puArr.push(['RAPID', pu.rapid, TT.gold])
+      if(pu.x2 > 0) puArr.push(['×2', pu.x2, TT.green])
+      puArr.forEach(([label, t, color], i) => {
+        const x = 8 + i*68
+        ctx.fillStyle = color
+        ctx.fillText(`${label} ${Math.ceil(t/60)}s`, x, H-6)
+      })
+      // Wave announce
+      if(waveAnnounceTimer > 0) {
+        const a = Math.min(1, waveAnnounceTimer/25)
+        ctx.globalAlpha = a
+        ctx.fillStyle = TT.gold
+        ctx.font = 'bold 20px monospace'
+        const tw = ctx.measureText(waveAnnounceText).width
+        ctx.fillText(waveAnnounceText, (W-tw)/2, H/2)
+        ctx.globalAlpha = 1
+      }
+      // Achievement popup (handled by React, but we draw a flash too)
+      // The actual popup is rendered in the React UI below
+    }
+
+    const update = () => {
+      frame++
+      // Decay
+      if(pu.double > 0) pu.double--
+      if(pu.triple > 0) pu.triple--
+      if(pu.rapid > 0) pu.rapid--
+      if(pu.x2 > 0) pu.x2--
+      if(player.invincible > 0) player.invincible--
+      if(shake > 0) shake--
+      if(comboTimer > 0) { comboTimer--; if(comboTimer === 0) combo = 0 }
+      if(waveAnnounceTimer > 0) waveAnnounceTimer--
+      if(flashScreen > 0) flashScreen--
+      // Achievement popup decay
+      if(achPopupTimerRef.current) {
+        achPopupTimerRef.current--
+        if(achPopupTimerRef.current <= 0) {
+          setAchPopup(null)
+          achPopupTimerRef.current = null
+        }
+      }
+
+      // Evolving background beat (Space Invaders heart)
+      const beatInterval = Math.max(8, 50 - wave*3)
+      if(frame % beatInterval === 0) {
+        sfx(110 + wave*6, 0.04, 'square', 0.025, 55 + wave*3)
+      }
+
+      // Achievement checks
+      checkAchievements()
+
+      // Player movement
+      const t = touchRef.current
+      const cm = controlModeRef.current
+      if(keys['arrowleft'] || keys['a'] || (cm === 'buttons' && t.left)) player.x -= player.speed
+      if(keys['arrowright'] || keys['d'] || (cm === 'buttons' && t.right)) player.x += player.speed
+      if(cm === 'swipe' && t.dragging && t.targetX != null) {
+        player.x = t.targetX - player.w/2
+      }
+      player.x = Math.max(0, Math.min(W - player.w, player.x))
+
+      // Shoot
+      const shootDelay = pu.rapid > 0 ? 7 : 16
+      if((keys[' '] || t.fire || t.autoFire) && frame - lastShot > shootDelay) {
+        fireBullet()
+        lastShot = frame
+      }
+
+      // Player bullets
+      for(const b of bullets) { b.y += b.vy; b.x += b.vx||0 }
+      bullets = bullets.filter(b => b.y > -10 && b.x > -10 && b.x < W+10)
+
+      // Wave management
+      if(waveTransitionTimer > 0) {
+        waveTransitionTimer--
+        if(waveTransitionTimer === 0) startNextWave()
+      } else {
+        const aliveEnemies = enemies.filter(e => e.alive)
+        if(aliveEnemies.length === 0) {
+          waveTransitionTimer = 50
+        } else {
+          const isBoss = aliveEnemies[0].type === 'boss'
+          if(isBoss) {
+            const boss = aliveEnemies[0]
+            boss.x += boss.vx
+            if(boss.x + boss.w >= W || boss.x <= 0) boss.vx *= -1
+            const bossShootDelay = Math.max(18, 50 - wave*2)
+            if(frame - boss.lastShot > bossShootDelay) {
+              boss.pattern = (boss.pattern + 1) % 3
+              const cx = boss.x + boss.w/2 - 2
+              const cy = boss.y + boss.h
+              const bspd = 2.8 + wave*0.1
+              if(boss.pattern === 0) {
+                for(let dx=-1; dx<=1; dx++) enemyBullets.push({ x:cx+dx*10, y:cy, w:4, h:8, vy:bspd, vx:dx*0.6 })
+              } else if(boss.pattern === 1) {
+                enemyBullets.push({ x:cx, y:cy, w:5, h:10, vy:bspd+1.5, vx:0 })
+              } else {
+                for(let dx=-2; dx<=2; dx++) enemyBullets.push({ x:cx, y:cy, w:4, h:8, vy:bspd, vx:dx*0.85 })
+              }
+              boss.lastShot = frame
+            }
+          } else {
+            // Formation movement (modulé par difficulté) — skip minis
+            const formation = aliveEnemies.filter(e => !e.mini)
+            const baseSpeed = (0.35 + wave*0.07 + (1 - formation.length / Math.max(1, enemies.filter(e=>!e.mini).length))*1.0) * diff.speed
+            let minX = Infinity, maxX = -Infinity, maxY = -Infinity
+            for(const e of formation){
+              if(e.x < minX) minX = e.x
+              if(e.x + e.w > maxX) maxX = e.x + e.w
+              if(e.y + e.h > maxY) maxY = e.y + e.h
+            }
+            let drop = false
+            if(maxX + baseSpeed*dirX >= W || minX + baseSpeed*dirX <= 0) { dirX *= -1; drop = true }
+            for(const e of formation) {
+              let s = baseSpeed
+              if(e.type === 'fast') s *= 1.7
+              if(e.type === 'teleporter') {
+                // Teleporter blinks around
+                e.teleTimer--
+                if(e.teleTimer <= 0) {
+                  e.teleTimer = rand(50, 110)
+                  e.x = rand(20, W - e.w - 20)
+                  e.y = rand(40, H*0.5)
+                  spawnParticles(e.x+e.w/2, e.y+e.h/2, '#b888e0', 8)
+                  sfx(700, 0.04, 'sine', 0.04, 1100)
+                }
+              } else {
+                e.x += s * dirX
+                if(drop) e.y += 12
+                if(e.type === 'zigzag') e.x += Math.sin((frame*0.05)+e.zigPhase) * 0.7
+              }
+            }
+            // Mini enemies move independently (bounce)
+            for(const e of aliveEnemies) {
+              if(!e.mini) continue
+              e.x += Math.sin(frame*0.1 + e.wobble) * 1.2
+              e.y += 0.8 + wave*0.04
+              if(e.x < 0 || e.x+e.w > W) e.wobble += Math.PI
+              e.x = Math.max(0, Math.min(W-e.w, e.x))
+              if(e.y + e.h > player.y) { die(); return }
+            }
+            // Danger phase detection
+            dangerRef.current = maxY > H*0.55
+            // Enemy shooting
+            const shootInt = Math.max(22, 95 - wave*5)
+            if(frame - lastEnemyShot > shootInt) {
+              const shooters = aliveEnemies.filter(e => !e.mini)
+              if(shooters.length > 0) {
+                const shooter = shooters[Math.floor(Math.random()*shooters.length)]
+                const bspd = 2.4 + wave*0.12
+                if(shooter.type === 'teleporter') {
+                  // Aimed shot towards player
+                  const dx = player.x + player.w/2 - (shooter.x + shooter.w/2)
+                  const dy = player.y + player.h/2 - (shooter.y + shooter.h)
+                  const dist = Math.sqrt(dx*dx + dy*dy) || 1
+                  enemyBullets.push({ x: shooter.x+shooter.w/2-3, y: shooter.y+shooter.h, w:5, h:9, vy: bspd*dy/dist, vx: bspd*dx/dist })
+                } else {
+                  enemyBullets.push({ x: shooter.x+shooter.w/2-2, y: shooter.y+shooter.h, w:4, h:8, vy:bspd, vx:0 })
+                }
+              }
+              lastEnemyShot = frame
+            }
+            // Enemies reach player → game over
+            if(maxY >= player.y) { die(); return }
+          }
+        }
+      }
+
+      // Enemy bullets
+      for(const b of enemyBullets) { b.y += b.vy; b.x += b.vx||0 }
+      enemyBullets = enemyBullets.filter(b => b.y < H+10 && b.x > -10 && b.x < W+10)
+
+      // Power-ups
+      for(const p of powerups) { p.y += p.vy; p.age++ }
+      powerups = powerups.filter(p => p.y < H+10)
+
+      // Bullets vs enemies
+      for(const b of bullets) {
+        if(b.y < -10) continue
+        for(const e of enemies) {
+          if(!e.alive) continue
+          if(b.x < e.x+e.w && b.x+b.w > e.x && b.y < e.y+e.h && b.y+b.h > e.y) {
+            b.y = -100
+            // Shielder: shield absorbs first hit
+            if(e.shield) {
+              e.shield = false
+              const TTs = themeRef.current
+              spawnParticles(e.x+e.w/2, e.y+e.h/2, TTs.blue, 10)
+              floatText(e.x+e.w/2, e.y, 'SHIELD OFF', TTs.blue)
+              sfx(440, 0.06, 'triangle', 0.06, 220)
+              try { navigator.vibrate?.(15) } catch {}
+              break
+            }
+            e.hp--
+            if(e.hp <= 0) {
+              e.alive = false
+              const basePts = e.type==='boss' ? (150+wave*15) : (e.type==='tank'||e.type==='shielder' ? 25 : (e.type==='zigzag' ? 20 : (e.type==='fast' ? 30 : (e.type==='splitter' ? 20 : (e.type==='teleporter' ? 35 : 10)))))
+              const before = score
+              gainScore(basePts)
+              bumpCombo()
+              const gained = score - before
+              const TTk = themeRef.current
+              floatText(e.x+e.w/2, e.y, `+${gained}`, TTk.gold)
+              const isLightK = TTk === LIGHT
+              const altPalette = isLightK
+                ? { basic:'#3a8a60', fast:'#2a7aaa', zigzag:'#aa5530', tank:'#6a4aaa', splitter:'#d08030', shielder:'#4a80aa', teleporter:'#8a4aaa' }
+                : { basic:'#7acca0', fast:'#a8d4f0', zigzag:'#e0a878', tank:'#a888d4', splitter:'#f0a040', shielder:'#7ab0e0', teleporter:'#b888e0' }
+              const col = altPalette[e.type] || TTk.red
+              // Death animation: shatter particles
+              const particleCount = e.type==='boss' ? 36 : (e.type==='tank'||e.type==='splitter' ? 16 : 10)
+              for(let i=0;i<particleCount;i++){
+                const angle = (Math.PI*2*i)/particleCount + rand(-0.2,0.2)
+                const spd = rand(0.8, 3.5)
+                particles.push({
+                  x: e.x+e.w/2, y: e.y+e.h/2,
+                  vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd,
+                  life: rand(18, 35), color: col,
+                })
+              }
+              // Screen flash on boss kill
+              if(e.type==='boss'){ triggerShake(16); sfx(110, 0.45, 'sawtooth', 0.13, 40); flashScreen = 14; try { navigator.vibrate?.([30,50,100]) } catch {} }
+              else if(e.type==='tank'){ sfx(330, 0.10, 'sawtooth', 0.06, 110); try { navigator.vibrate?.(20) } catch {} }
+              else if(e.type==='splitter'){ sfx(280, 0.10, 'sawtooth', 0.07, 140); try { navigator.vibrate?.([10,30,10]) } catch {} }
+              else if(e.type==='shielder'){ sfx(550, 0.08, 'triangle', 0.06, 330) }
+              else if(e.type==='teleporter'){ sfx(800, 0.07, 'sine', 0.05, 1200) }
+              else { sfx(660, 0.05, 'square', 0.05); try { navigator.vibrate?.(10) } catch {} }
+              // Splitter: spawn 2 mini enemies
+              if(e.type==='splitter' && !e.mini) {
+                for(let s=-1; s<=1; s+=2) {
+                  enemies.push({
+                    x: e.x+e.w/2-10+s*12, y: e.y+e.h/2-5,
+                    w:16, h:12, alive:true, row:e.row, col:e.col,
+                    type:'splitter', hp:1, mini:true,
+                    wobble: rand(0,2), zigPhase: rand(0, Math.PI*2),
+                  })
+                }
+              }
+              const dropChance = e.type==='boss' ? 1 : (e.type==='tank'||e.type==='shielder' ? 0.28 : (e.type==='teleporter' ? 0.18 : 0.07))
+              if(Math.random() < dropChance) spawnPowerup(e.x+e.w/2, e.y+e.h/2)
+              if(e.type==='boss') {
+                spawnPowerup(e.x+20, e.y+e.h/2)
+                spawnPowerup(e.x+e.w-20, e.y+e.h/2)
+                flashScreen = 14
+              }
+              // Speed Drinker check
+              lastKillTimes.push(frame)
+              if(lastKillTimes.length > 3) lastKillTimes.shift()
+            } else {
+              sfx(440, 0.03, 'square', 0.03)
+            }
+            break
+          }
+        }
+      }
+      bullets = bullets.filter(b => b.y > -10)
+
+      // Enemy bullets vs player
+      for(const b of enemyBullets) {
+        if(b.y < -50) continue
+        if(b.x < player.x+player.w && b.x+b.w > player.x && b.y < player.y+player.h && b.y+b.h > player.y) {
+          if(player.invincible > 0) { continue }
+          if(player.shield > 0) {
+            player.shield = 0
+            b.y = H+100
+            const TTs = themeRef.current
+            spawnParticles(player.x+player.w/2, player.y+player.h/2, TTs.blue, 14)
+            floatText(player.x+player.w/2, player.y-10, 'SHIELD!', TTs.blue)
+            sfx(660, 0.10, 'triangle', 0.08, 440)
+          } else {
+            const dead = takeDamage()
+            b.y = H+100
+            if(dead) return
+          }
+        }
+      }
+      enemyBullets = enemyBullets.filter(b => b.y < H+10)
+
+      // Power-up pickup
+      for(const p of powerups) {
+        if(p.x < player.x+player.w && p.x+p.w > player.x && p.y < player.y+player.h && p.y+p.h > player.y) {
+          applyPowerup(p.type)
+          p.y = H+100
+        }
+      }
+      powerups = powerups.filter(p => p.y < H+10)
+
+      // Particles
+      for(const p of particles) { p.x += p.vx; p.y += p.vy; p.life-- }
+      particles = particles.filter(p => p.life > 0)
+
+      // Floating texts
+      for(const ft of floatingTexts) { ft.y -= 0.6; ft.life-- }
+      floatingTexts = floatingTexts.filter(ft => ft.life > 0)
+    }
+
+    const loop = () => {
+      if(!alive) return
+      if(!pausedRef.current){
+        update()
+        if(!alive) return
+        draw()
+      } else {
+        // En pause : on dessine le frame courant + overlay
+        draw()
+        const TT = themeRef.current
+        ctx.setTransform(1,0,0,1,0,0)
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.fillRect(0,0,W,H)
+        ctx.fillStyle = TT.gold
+        ctx.font = 'bold 24px monospace'
+        const txt = '⏸ PAUSE'
+        const tw = ctx.measureText(txt).width
+        ctx.fillText(txt, (W-tw)/2, H/2)
+        ctx.font = 'bold 10px monospace'
+        const sub = 'P / TAP — REPRENDRE'
+        const tw2 = ctx.measureText(sub).width
+        ctx.fillText(sub, (W-tw2)/2, H/2+22)
+      }
+      requestAnimationFrame(loop)
+    }
+    startNextWave()
+    sfx(660, 0.10, 'square', 0.05, 880)
+    requestAnimationFrame(loop)
+
+    return () => {
+      alive = false
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [gameKey])
+
+  const startGame = () => {
+    setIsNewRecord(false)
+    setAutoFire(false)
+    setPaused(false)
+    setStatus('playing')
+    setGameKey(k => k + 1)
+  }
+  const goToMenu = () => { setAutoFire(false); setPaused(false); setStatus('menu') }
+  const toggleAutoFire = () => setAutoFire(v => !v)
+  const togglePause = () => setPaused(p => !p)
+  const tDown = which => () => { touchRef.current[which] = true }
+  const tUp = which => () => { touchRef.current[which] = false }
+
+  const mapPointerToCanvas = (clientX) => {
+    const c = canvasRef.current
+    if(!c) return null
+    const rect = c.getBoundingClientRect()
+    return (clientX - rect.left) * (c.width / rect.width)
+  }
+  const onCanvasPointerDown = (e) => {
+    if(status !== 'playing') return
+    if(paused){ e.preventDefault(); setPaused(false); return }
+    // Easter egg: tap score 10 times to unlock golden skin
+    const cx = mapPointerToCanvas(e.clientX)
+    const cy = (() => { const c = canvasRef.current; if(!c) return 0; const r = c.getBoundingClientRect(); return (e.clientY - r.top) * (c.height / r.height) })()
+    if(cx !== null && cx >= 8 && cx <= 128 && cy >= 4 && cy <= 20) {
+      const now = Date.now()
+      const st = scoreTapRef.current
+      if(now - st.lastTime > 2000) st.count = 0
+      st.count++; st.lastTime = now
+      try { navigator.vibrate?.(5) } catch {}
+      if(st.count >= 10 && !goldenSkin) {
+        setGoldenSkin(true)
+        try { localStorage.setItem(INVADERS_GOLDEN_KEY, '1') } catch {}
+        // Will be awarded as achievement at next check
+      }
+      return
+    }
+    if(controlMode !== 'swipe') return
+    e.preventDefault()
+    try { e.target.setPointerCapture(e.pointerId) } catch {}
+    touchRef.current.dragging = true
+    touchRef.current.targetX = cx
+  }
+  const onCanvasPointerMove = (e) => {
+    if(!touchRef.current.dragging) return
+    touchRef.current.targetX = mapPointerToCanvas(e.clientX)
+  }
+  const onCanvasPointerUp = (e) => {
+    if(!touchRef.current.dragging) return
+    try { e.target.releasePointerCapture(e.pointerId) } catch {}
+    touchRef.current.dragging = false
+  }
+
+  const W=320, H=480
+  const isLight = T === LIGHT
+  const overlayBg = isLight ? 'rgba(244,244,248,0.96)' : '#000000f5'
+  const panelBg = isLight ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.82)'
+  const btn = {padding:'14px 22px',background:T.bg3,border:`1px solid ${T.gold}55`,color:T.gold,borderRadius:6,fontSize:20,touchAction:'manipulation',userSelect:'none',cursor:'pointer',WebkitTapHighlightColor:'transparent'}
+  const fireBtn = {...btn,padding:'14px 28px',background:`${T.gold}22`,border:`1px solid ${T.gold}`,fontSize:14,letterSpacing:'0.1em',fontWeight:700}
+  const fireBtnActive = {...fireBtn,background:`${T.gold}55`,boxShadow:`0 0 14px ${T.gold}88`}
+  const modeBtn = (active) => ({
+    flex:1,padding:'14px 12px',
+    background: active ? `${T.gold}22` : T.bg3,
+    border: `2px solid ${active ? T.gold : T.border}`,
+    color: active ? T.gold : T.textDim,
+    borderRadius:8,cursor:'pointer',fontFamily:'monospace',fontSize:11,letterSpacing:'0.12em',fontWeight:700,
+    touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+    display:'flex',flexDirection:'column',alignItems:'center',gap:6,
+  })
+  const playBtn = {marginTop:6,padding:'14px 32px',background:`${T.gold}33`,border:`2px solid ${T.gold}`,color:T.gold,borderRadius:8,cursor:'pointer',fontFamily:'monospace',fontSize:14,letterSpacing:'0.2em',fontWeight:700,touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}
+  const swipeMode = controlMode === 'swipe' && status === 'playing'
+
+  return (
+    <div style={{position:'fixed',inset:0,background:overlayBg,zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:14,gap:10}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',maxWidth:380,gap:6}}>
+        <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,letterSpacing:'0.2em',color:T.gold,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>☕ COFFEE INVADERS</div>
+        {status==='playing'&&(
+          <button onClick={togglePause} title="Pause (P)" style={{background:paused?`${T.gold}22`:'transparent',border:`1px solid ${paused?T.gold:T.border}`,color:paused?T.gold:T.textDim,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:14,lineHeight:1,touchAction:'manipulation'}}>{paused?'▶':'⏸'}</button>
+        )}
+        <button onClick={()=>setSoundOn(s=>!s)} title={soundOn?'Son ON':'Son OFF'} style={{background:'transparent',border:`1px solid ${T.border}`,color:soundOn?T.gold:T.textMute,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:13,lineHeight:1,touchAction:'manipulation'}}>{soundOn?'🔊':'🔇'}</button>
+        <button onClick={onClose} style={{background:'transparent',border:`1px solid ${T.border}`,color:T.textDim,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:18,lineHeight:1,touchAction:'manipulation'}}>×</button>
+      </div>
+      <div style={{position:'relative'}}>
+        <canvas
+          ref={canvasRef}
+          width={W}
+          height={H}
+          onPointerDown={onCanvasPointerDown}
+          onPointerMove={onCanvasPointerMove}
+          onPointerUp={onCanvasPointerUp}
+          onPointerCancel={onCanvasPointerUp}
+          style={{display:'block',background:T.inputBg,border:`2px solid ${T.gold}44`,borderRadius:6,maxWidth:'100%',height:'auto',imageRendering:'pixelated',touchAction: swipeMode ? 'none' : 'auto'}}
+        />
+        {status === 'menu' && (
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:panelBg,borderRadius:6,gap:14,padding:20}}>
+            <div style={{fontFamily:'monospace',fontSize:14,fontWeight:700,letterSpacing:'0.25em',color:T.gold,marginBottom:4}}>☕ INVADERS</div>
+            {hiscore.score > 0 ? (
+              <div style={{textAlign:'center'}}>
+                <div style={{fontFamily:'monospace',fontSize:9,color:T.textDim,letterSpacing:'0.2em'}}>MEILLEUR SCORE</div>
+                <div style={{fontFamily:'monospace',fontSize:26,fontWeight:700,color:T.gold,marginTop:2}}>{hiscore.score}</div>
+                <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,letterSpacing:'0.15em',marginTop:1}}>VAGUE {hiscore.wave}</div>
+              </div>
+            ) : (
+              <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,letterSpacing:'0.15em'}}>— Aucun score enregistré —</div>
+            )}
+            <div style={{fontFamily:'monospace',fontSize:9,color:T.textDim,letterSpacing:'0.2em',marginTop:6}}>CONTRÔLES</div>
+            <div style={{display:'flex',gap:10,width:'100%',maxWidth:260}}>
+              <button onClick={()=>setControlMode('buttons')} style={modeBtn(controlMode==='buttons')}>
+                <div style={{fontSize:18}}>◀ ▶</div>
+                <div>BOUTONS</div>
+              </button>
+              <button onClick={()=>setControlMode('swipe')} style={modeBtn(controlMode==='swipe')}>
+                <div style={{fontSize:18}}>✋</div>
+                <div>SWIPE</div>
+              </button>
+            </div>
+            <div style={{fontFamily:'monospace',fontSize:9,color:T.textDim,letterSpacing:'0.2em',marginTop:2}}>DIFFICULTÉ</div>
+            <div style={{display:'flex',gap:6,width:'100%',maxWidth:280}}>
+              {[
+                {id:'easy',label:'Facile',sub:'4 ❤'},
+                {id:'normal',label:'Normal',sub:'3 ❤'},
+                {id:'hard',label:'Difficile',sub:'2 ❤'},
+              ].map(d=>(
+                <button key={d.id} onClick={()=>setDifficulty(d.id)} style={{
+                  flex:1,padding:'8px 4px',
+                  background: difficulty===d.id ? `${T.gold}22` : T.bg3,
+                  border: `1.5px solid ${difficulty===d.id ? T.gold : T.border}`,
+                  color: difficulty===d.id ? T.gold : T.textDim,
+                  borderRadius:6,cursor:'pointer',fontFamily:'monospace',fontSize:10,letterSpacing:'0.05em',fontWeight:700,
+                  touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                  display:'flex',flexDirection:'column',alignItems:'center',gap:2,
+                }}>
+                  <div>{d.label}</div>
+                  <div style={{fontSize:9,opacity:0.8}}>{d.sub}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8,alignItems:'center',marginTop:2}}>
+              <button onClick={()=>setSoundOn(s=>!s)} style={{
+                padding:'7px 14px',background:soundOn?`${T.green}18`:T.bg3,
+                border:`1.5px solid ${soundOn?T.green:T.border}`,
+                color:soundOn?T.green:T.textDim,
+                borderRadius:6,cursor:'pointer',fontFamily:'monospace',fontSize:10,letterSpacing:'0.1em',fontWeight:700,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              }}>{soundOn?'🔊 SON ON':'🔇 SON OFF'}</button>
+            </div>
+            {/* Achievements */}
+            {achievements.length > 0 && (
+              <div style={{marginTop:4,width:'100%',maxWidth:280}}>
+                <div style={{fontFamily:'monospace',fontSize:9,color:T.textDim,letterSpacing:'0.2em',textAlign:'center',marginBottom:6}}>SUCCÈS ({achievements.length}/{ACHIEVEMENTS.length})</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:4,justifyContent:'center'}}>
+                  {ACHIEVEMENTS.map(a => {
+                    const earned = achievements.includes(a.id)
+                    return (
+                      <div key={a.id} title={earned ? a.label+' — '+a.desc : '???'} style={{
+                        padding:'3px 7px',borderRadius:4,
+                        background: earned ? `${a.color}22` : T.bg3,
+                        border: `1px solid ${earned ? a.color+'88' : T.border}`,
+                        color: earned ? a.color : T.textMute,
+                        fontFamily:'monospace',fontSize:10,
+                        opacity: earned ? 1 : 0.45,
+                      }}>
+                        {earned ? a.icon : '?'} {earned ? a.label : '???'}
+                      </div>
+                    )
+                  })}
+                  {goldenSkin && (
+                    <div style={{padding:'3px 7px',borderRadius:4,background:`${T.gold}22`,border:`1px solid ${T.gold}88`,color:T.gold,fontFamily:'monospace',fontSize:10}}>✨ Golden Skin</div>
+                  )}
+                </div>
+              </div>
+            )}
+            <button onClick={startGame} style={playBtn}>▶ JOUER</button>
+          </div>
+        )}
+        {/* Achievement popup during gameplay */}
+        {status === 'playing' && achPopup && (
+          <div style={{position:'absolute',top:46,left:0,right:0,display:'flex',justifyContent:'center',zIndex:10}}>
+            {(() => {
+              const a = ACHIEVEMENTS.find(x=>x.id===achPopup.id)
+              if(!a) return null
+              return (
+                <div style={{
+                  padding:'6px 10px 6px 18px',borderRadius:6,
+                  background: `${a.color}28`,
+                  border: `2px solid ${a.color}`,
+                  color: a.color,
+                  fontFamily:'monospace',fontSize:12,fontWeight:700,letterSpacing:'0.1em',
+                  display:'flex',alignItems:'center',gap:10,
+                }}>
+                  <span>{a.icon} {a.label} — DÉBLOQUÉ!</span>
+                  <button onClick={(e)=>{ e.stopPropagation(); setAchPopup(null); achPopupTimerRef.current = null }} style={{
+                    background:'transparent',border:'none',color:a.color,cursor:'pointer',
+                    fontSize:16,lineHeight:1,padding:'2px 4px',touchAction:'manipulation',
+                  }}>×</button>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+        {status === 'lost' && (
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:panelBg,borderRadius:6,gap:8,padding:14}}>
+            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,letterSpacing:'0.2em',color:T.red}}>💥 GAME OVER</div>
+            {isNewRecord && (
+              <div style={{fontFamily:'monospace',fontSize:11,fontWeight:700,letterSpacing:'0.2em',color:T.gold,padding:'4px 12px',border:`1px solid ${T.gold}`,borderRadius:4,background:`${T.gold}22`}}>★ NOUVEAU RECORD ★</div>
+            )}
+            <div style={{fontFamily:'monospace',fontSize:11,color:T.gold,letterSpacing:'0.15em',marginTop:6}}>VAGUE ATTEINTE</div>
+            <div style={{fontFamily:'monospace',fontSize:28,fontWeight:700,color:T.gold,marginTop:-4}}>{finalWave}</div>
+            <div style={{fontFamily:'monospace',fontSize:11,color:T.gold,letterSpacing:'0.15em',marginTop:4}}>SCORE</div>
+            <div style={{fontFamily:'monospace',fontSize:22,fontWeight:700,color:T.gold,marginTop:-4}}>{finalScore}</div>
+            {!isNewRecord && hiscore.score > 0 && (
+              <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,letterSpacing:'0.15em',marginTop:2}}>BEST {hiscore.score} · V{hiscore.wave}</div>
+            )}
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button onClick={goToMenu} style={{padding:'10px 18px',background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation',fontFamily:'monospace'}}>☰ MENU</button>
+              <button onClick={startGame} style={{padding:'10px 24px',background:`${T.gold}22`,border:`1px solid ${T.gold}`,color:T.gold,borderRadius:6,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation',fontFamily:'monospace'}}>⟲ REJOUER</button>
+            </div>
+          </div>
+        )}
+      </div>
+      {status === 'playing' && (
+        <div style={{display:'flex',gap:10,width:'100%',maxWidth:380,justifyContent:'space-between',alignItems:'center'}}>
+          {controlMode === 'buttons' ? (
+            <div style={{display:'flex',gap:6}}>
+              <button onTouchStart={tDown('left')} onTouchEnd={tUp('left')} onMouseDown={tDown('left')} onMouseUp={tUp('left')} onMouseLeave={tUp('left')} style={btn}>◀</button>
+              <button onTouchStart={tDown('right')} onTouchEnd={tUp('right')} onMouseDown={tDown('right')} onMouseUp={tUp('right')} onMouseLeave={tUp('right')} style={btn}>▶</button>
+            </div>
+          ) : (
+            <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,letterSpacing:'0.1em',padding:'0 4px'}}>✋ Glisser sur l'écran</div>
+          )}
+          {controlMode === 'swipe' ? (
+            <button onClick={toggleAutoFire} style={autoFire ? fireBtnActive : fireBtn}>{autoFire ? '🫘 AUTO ●' : '🫘 FIRE'}</button>
+          ) : (
+            <button onTouchStart={tDown('fire')} onTouchEnd={tUp('fire')} onMouseDown={tDown('fire')} onMouseUp={tUp('fire')} onMouseLeave={tUp('fire')} style={fireBtn}>🫘 FIRE</button>
+          )}
+        </div>
+      )}
+      <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,textAlign:'center',letterSpacing:'0.1em'}}>
+        {controlMode === 'swipe' && status === 'playing'
+          ? '✋ Glisser pour bouger · 🫘 = tir auto on/off · ÉCHAP = quitter'
+          : '← → / A D · ESPACE = tirer · ÉCHAP = quitter'}
+      </div>
+    </div>
+  )
+}
+
+// ─── MACHINE SELECTOR ─────────────────────────────────────────────────────────
+function MachineSelector({ machineId, setMachineId, T }) {
+  const [open,setOpen]=useState(false)
+  const m = getMachine(machineId)
+  const {favs,toggle:toggleFav,isFav}=useFavorites(FAV_MACHINES_KEY)
+  const favEntries=favs.map(id=>[id,MACHINES[id]]).filter(([,v])=>v)
+  return (
+    <div style={card(T)}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{...SL(T),marginBottom:0}}>☕ Machine <span style={{color:MC,marginLeft:4}}>●</span></div>
+        <div style={{fontSize:18,color:T.textMute,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',lineHeight:1}}>▾</div>
+      </div>
+      {!open&&(
+        <div style={{marginTop:8}}>
+          <div style={{fontFamily:'monospace',fontSize:12,color:MC,fontWeight:700}}>{m.label}{m.brand?` — ${m.brand}`:''}</div>
+          {m.description&&<div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:3}}>{m.description}</div>}
+        </div>
+      )}
+      {!open&&favEntries.length>0&&(
+        <div style={{marginTop:10,display:'flex',gap:6,flexWrap:'wrap'}}>
+          {favEntries.map(([id,v])=>(
+            <button key={id} onClick={(e)=>{e.stopPropagation();setMachineId(id)}} style={{
+              padding:'5px 10px',fontSize:10,fontFamily:'monospace',
+              border:`1px solid ${machineId===id?MC:`${MC}55`}`,
+              background:machineId===id?`${MC}22`:`${MC}0a`,
+              color:machineId===id?MC:T.textDim,
+              borderRadius:14,cursor:'pointer',touchAction:'manipulation',
+              fontWeight:machineId===id?700:400,
+            }}>★ {v.label}</button>
+          ))}
+        </div>
+      )}
+      {open&&(
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:10}}>Sélectionner la machine</div>
+          {/* Bouton rapide — machine générique sans pré-infusion */}
+          <button onClick={()=>{setMachineId('classic_other');setOpen(false)}} style={{
+            width:'100%',textAlign:'left',padding:'11px 14px',marginBottom:12,
+            background:machineId==='classic_other'?`${MC}22`:`${MC}0d`,
+            border:`1px solid ${machineId==='classic_other'?MC:`${MC}66`}`,
+            borderRadius:6,color:machineId==='classic_other'?MC:T.textDim,
+            cursor:'pointer',fontSize:12,touchAction:'manipulation',
+            display:'flex',alignItems:'center',gap:10,
+          }}>
+            <span style={{fontSize:18,lineHeight:1}}>☕</span>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,letterSpacing:'0.03em'}}>Autre / classique, sans Pré-Infusion</div>
+              <div style={{fontSize:9,color:machineId==='classic_other'?`${MC}99`:T.textMute,fontFamily:'monospace',marginTop:2}}>Toute machine sans pré-infusion — recommandations standard</div>
+            </div>
+            {machineId==='classic_other'&&<span style={{color:MC,fontWeight:700,fontSize:14}}>✓</span>}
+          </button>
+          <div style={{borderTop:`1px solid ${T.border}`,marginBottom:10}}/>
+          {favEntries.length>0&&(
+            <div>
+              <div style={{fontSize:9,letterSpacing:'0.3em',color:MC,textTransform:'uppercase',marginTop:0,marginBottom:5,paddingLeft:8,borderLeft:`2px solid ${MC}`}}>★ Favoris</div>
+              {favEntries.map(([id,v])=>(
+                <div key={id} style={{display:'flex',alignItems:'stretch',marginBottom:4}}>
+                  <button onClick={()=>{setMachineId(id);setOpen(false)}} style={{flex:1,textAlign:'left',padding:'9px 12px',background:machineId===id?`${MC}18`:T.bg3,border:`1px solid ${machineId===id?MC:T.border}`,borderRadius:'5px 0 0 5px',borderRight:'none',color:machineId===id?MC:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                    <span style={{fontWeight:machineId===id?700:400}}>{v.label}{v.brand?` — ${v.brand}`:''}</span>
+                    {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                  </button>
+                  <button onClick={(e)=>{e.stopPropagation();toggleFav(id)}} style={{padding:'0 12px',background:`${MC}18`,border:`1px solid ${MC}`,borderLeft:'none',borderRadius:'0 5px 5px 0',color:MC,cursor:'pointer',fontSize:14,touchAction:'manipulation'}}>★</button>
+                </div>
+              ))}
+              <div style={{borderTop:`1px solid ${T.border}`,marginTop:8,marginBottom:8}}/>
+            </div>
+          )}
+          {MACHINE_CATEGORIES.map(cat=>{
+            const entries=Object.entries(MACHINES).filter(([,v])=>v.piType===cat.piType)
+            if(!entries.length) return null
+            return (
+              <div key={cat.piType}>
+                <div style={{fontSize:9,letterSpacing:'0.3em',color:T.textMute,textTransform:'uppercase',marginTop:10,marginBottom:5,paddingLeft:8,borderLeft:`2px solid ${MC}44`}}>{cat.label}</div>
+                {entries.map(([k,v])=>(
+                  <div key={k} style={{display:'flex',alignItems:'stretch',marginBottom:4}}>
+                    <button onClick={()=>{setMachineId(k);setOpen(false)}} style={{flex:1,textAlign:'left',padding:'9px 12px',background:machineId===k?`${MC}18`:T.bg3,border:`1px solid ${machineId===k?MC:T.border}`,borderRadius:'5px 0 0 5px',borderRight:'none',color:machineId===k?MC:T.text,cursor:'pointer',fontSize:12,touchAction:'manipulation',display:'flex',flexDirection:'column',gap:2}}>
+                      <span style={{fontWeight:machineId===k?700:400}}>{v.label}{v.brand?` — ${v.brand}`:''}</span>
+                      {v.description&&<span style={{fontSize:9,color:T.textMute,fontFamily:'monospace'}}>{v.description}</span>}
+                    </button>
+                    <button onClick={(e)=>{e.stopPropagation();toggleFav(k)}} style={{padding:'0 12px',background:isFav(k)?`${MC}18`:T.bg3,border:`1px solid ${isFav(k)?MC:T.border}`,borderLeft:'none',borderRadius:'0 5px 5px 0',color:isFav(k)?MC:T.textMute,cursor:'pointer',fontSize:14,touchAction:'manipulation'}} title={isFav(k)?'Retirer des favoris':'Ajouter aux favoris'}>{isFav(k)?'★':'☆'}</button>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── TAB MACHINE ──────────────────────────────────────────────────────────────
+function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, notes, setNotes, portafilterType, setPortafilterType, T }) {
+  const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
+  const [resetConfirm,setResetConfirm]=useState(false)
+  const [showGuide,setShowGuide]=useState(false)
+  const [liveWeight,setLiveWeight]=useState(0),[liveWeightOpen,setLiveWeightOpen]=useState(false)
+  const [showInvaders,setShowInvaders]=useState(false)
+  const machine=getMachine(machineId)
+  const piType=machine.piType
+  const titleClickRef=useRef({count:0,lastTime:0})
+  const onTitleClick=()=>{
+    const now=Date.now(),ref=titleClickRef.current
+    if(now-ref.lastTime>1500)ref.count=0
+    ref.count++;ref.lastTime=now
+    if(ref.count>=7){ref.count=0;setShowInvaders(true)}
+  }
+
+  // Sync valeurs constructeur quand on choisit une machine à PI fixe
+  useEffect(()=>{
+    if(piType==='fixed'&&machine.fixedPI){
+      setPreInfSec(machine.fixedPI.sec)
+      setPreInfPct(machine.fixedPI.pct)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[machineId])
+
+  const result=computeMachineDialIn({doseG:dose,yieldG:yld,timeSec:time,tempC:temp,preInfPct,preInfSec,piType})
+  const targetWeight=Math.round(dose*2.0)
+  const liveW=liveWeight>0?liveWeight:yld
+  const ratioProgress=Math.min((liveW/dose)/2.0*100,100)
+  const ratioColor=ratioProgress>=95?T.green:ratioProgress>=80?T.orange:T.red
+
+  const doTaste=taste=>{
+    const fb=computeTasteMachine({taste,tempC:temp,preInfPct,preInfSec,yieldG:yld,piType},T)
+    if(!fb)return;setFlash(taste);setTimeout(()=>setFlash(null),1000);setFeedback(fb)
+    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,taste,score:taste==='perfect'?100:(result?.score??0),coffee:{...coffee},notes:{...notes}})
+    if(taste!=='perfect'){setTemp(fb.newTemp);setPreInfPct(fb.newPreInfPct);setPreInfSec(fb.newPreInfSec)}
+  }
+  const applyResult=()=>{
+    if(!result)return
+    onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,score:result.score,coffee:{...coffee},notes:{...notes}})
+    setTemp(result.newTemp);setPreInfSec(result.newPreInfSec);setPreInfPct(result.newPreInfPct)
+  }
+  const doSaveNotes=()=>onSave({mode:'machine',dose,yld,time,temp,preInfPct,preInfSec,machineId,score:result?.score??0,coffee:{...coffee},notes:{...notes}})
+
+  return (<>
+    {showGuide&&<GuideModal mode="machine" onClose={()=>setShowGuide(false)} T={T}/>}
+    {liveWeightOpen&&<NumPad label="Poids en tasse" unit="g" initial={liveWeight>0?liveWeight:yld} min={0} max={500} onConfirm={w=>{setLiveWeight(w);setYld(w);setLiveWeightOpen(false)}} onClose={()=>setLiveWeightOpen(false)} T={T}/>}
+    {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)} T={T}/>}
+
+    {/* Bouton guide */}
+    <div style={{marginBottom:16}}>
+      <button onClick={()=>setShowGuide(true)} style={{width:'100%',padding:'9px 0',background:T.bg3,border:`1px solid ${T.gold}66`,color:T.gold,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',touchAction:'manipulation'}}>📖 GUIDE — MACHINE</button>
+    </div>
+
+    <div style={{...card(T),border:`1px solid ${MC}44`,background:`${MC}08`}}>
+      <div onClick={onTitleClick} style={{...SL(T),color:MC,cursor:'pointer',userSelect:'none',WebkitTapHighlightColor:'transparent',touchAction:'manipulation'}}>⚙ {machine.label}{machine.brand?` — ${machine.brand}`:''}</div>
+      <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute}}>Espresso · ratio 1:2 · 20–35s · 90–96°C</div>
+    </div>
+
+    <MachineSelector machineId={machineId} setMachineId={setMachineId} T={T}/>
+
+    <CoffeeCard coffee={coffee} setCoffee={setCoffee} T={T}/>
+    <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
+    <TastingNotes notes={notes} setNotes={setNotes} onSave={doSaveNotes} T={T}/>
+
+    {/* PRE-INFUSION */}
+    <div style={card(T)}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+        <div style={{...SL(T),marginBottom:0}}>Pre-Infusion</div>
+        <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,letterSpacing:'0.1em',textTransform:'uppercase'}}>
+          {piType==='none'&&'Aucune'}
+          {piType==='fixed'&&'Fixe (constructeur)'}
+          {piType==='programmable'&&'Réglable'}
+          {piType==='lever'&&'Manuelle'}
+        </div>
+      </div>
+      {piType==='none'&&(
+        <div style={{padding:'16px 0',textAlign:'center',color:T.textMute,fontFamily:'monospace',fontSize:13,letterSpacing:'0.1em',opacity:0.6}}>
+          — Sans pre-infusion —
+        </div>
+      )}
+      {piType==='lever'&&(
+        <div style={{padding:'16px 0',textAlign:'center',color:T.textMute,fontFamily:'monospace',fontSize:13,letterSpacing:'0.1em',opacity:0.6}}>
+          — Pre-Infusion manuelle (levier) —
+        </div>
+      )}
+      {piType==='fixed'&&(
+        <>
+          <div style={{display:'flex',gap:16,flexWrap:'wrap',opacity:0.75,pointerEvents:'none'}}>
+            <NumIn label="Durée" val={preInfSec} set={()=>{}} unit="s" min={1} max={30} color={MC} T={T}/>
+            <NumIn label="Pression" val={preInfPct} set={()=>{}} unit="%" min={55} max={99} step={1} color={MC} T={T}/>
+          </div>
+          <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>Valeurs constructeur — non modifiables</div>
+          <Bar pct={(preInfSec/10)*100} color={preInfSec>=3&&preInfSec<=10?T.green:T.orange} T={T}/>
+        </>
+      )}
+      {piType==='programmable'&&(
+        <>
+          <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
+            <NumIn label="Durée" val={preInfSec} set={setPreInfSec} unit="s" min={1} max={30} color={MC} T={T}/>
+            <NumIn label="Pression" val={preInfPct} set={setPreInfPct} unit="%" min={55} max={99} step={1} color={MC} T={T}/>
+          </div>
+          <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>Pression 55–99% · durée recommandée 3–8s</div>
+          <Bar pct={(preInfSec/10)*100} color={preInfSec>=3&&preInfSec<=10?T.green:T.orange} T={T}/>
+        </>
+      )}
+    </div>
+
+    {/* TIMER + ANALYSE — fusionnés */}
+    <div style={card(T)}>
+      <div style={SL(T)}>Analyse d'extraction</div>
+
+      <div style={{marginBottom:14}}>
+        <NumIn label="Dose" val={dose} set={setDose} unit="g" min={5} max={40} color={MC} T={T}/>
+        <div style={{display:'flex',gap:6,marginTop:8,justifyContent:'center'}}>
+          {[['single','◉ Single'],['double','◉◉ Double']].map(([type,label])=>(
+            <button key={type} onClick={()=>setPortafilterType(portafilterType===type?null:type)} style={{
+              padding:'5px 14px',borderRadius:4,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',
+              border:`1px solid ${portafilterType===type?MC:T.border}`,
+              background:portafilterType===type?`${MC}22`:T.bg,
+              color:portafilterType===type?MC:T.textDim,
+              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              transition:'all 0.15s',fontWeight:portafilterType===type?700:400,
+            }}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}>
+        <div style={{flex:1}}>
+          <Timer running={timerRunning} elapsed={timerElapsed} onStart={timerStart} onPause={timerPause} onReset={timerReset} T={T}/>
+        </div>
+        <button onClick={()=>setLiveWeightOpen(true)} style={{
+          flex:1,padding:'12px 8px',background:liveWeight>0?`${ratioColor}18`:T.bg3,
+          border:`2px solid ${liveWeight>0?ratioColor:T.border}`,borderRadius:8,
+          color:liveWeight>0?ratioColor:T.textMute,cursor:'pointer',textAlign:'center',
+          touchAction:'manipulation',WebkitTapHighlightColor:'transparent',transition:'all 0.2s',
+          boxShadow:liveWeight>0?`0 0 16px ${ratioColor}44`:'none',
+        }}>
+          <div style={{fontSize:9,letterSpacing:'0.25em',textTransform:'uppercase',marginBottom:4,color:liveWeight>0?ratioColor:T.textMute}}>POIDS TASSE</div>
+          <div style={{fontFamily:'monospace',fontSize:32,fontWeight:300,lineHeight:1,textShadow:liveWeight>0?`0 0 20px ${ratioColor}66`:'none'}}>
+            {liveW}<span style={{fontSize:12,marginLeft:3}}>g</span>
+          </div>
+          <div style={{fontSize:9,color:T.textMute,marginTop:4}}>tap pour modifier</div>
+        </button>
+      </div>
+
+      <div style={{marginBottom:12}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:6}}>
+          <span style={{fontFamily:'monospace',fontSize:14,color:ratioColor,fontWeight:700}}>
+            1:{(liveW/dose).toFixed(2)}
+          </span>
+          <span style={{fontFamily:'monospace',fontSize:10,color:T.textMute}}>
+            cible 1:1.5–1:2.5 · {targetWeight}g
+          </span>
+        </div>
+        <div style={{height:7,background:T.bg3,borderRadius:4,overflow:'hidden'}}>
+          <div style={{height:'100%',width:`${ratioProgress}%`,background:ratioColor,borderRadius:4,transition:'width 0.3s',boxShadow:`0 0 10px ${ratioColor}88`}}/>
+        </div>
+        <div style={{fontFamily:'monospace',fontSize:10,color:ratioColor,marginTop:5,textAlign:'right'}}>
+          {ratioProgress>=95?'✓ Dans la cible':liveW<targetWeight?`→ encore ${targetWeight-liveW}g`:'✓ Cible atteinte'}
+        </div>
+      </div>
+
+      <div style={{marginTop:4}}><NumIn label="Saisie manuelle (s)" val={time} set={setTime} unit="s" min={5} max={90} color={T.textDim} T={T}/></div>
+      <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>cible 20–35s</div>
+      <Bar pct={(time/35)*100} color={time>=20&&time<=35?T.green:T.red} T={T}/>
+      {result&&(<>
+        <div style={{borderTop:`1px solid ${T.border}`,margin:'16px 0'}}/>
+        <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',marginBottom:14}}>
+          <ScoreRing score={result.score} T={T}/>
+          <div>
+            <div style={{fontFamily:'monospace',fontSize:11,color:T.textDim,marginBottom:6}}>Ratio 1:{result.ratio.toFixed(1)} · {formatTime(time)} · {temp}°C</div>
+            <Bar2 label="Ratio" v={result.ratioScore} T={T}/>
+            <Bar2 label="Temps" v={result.timeScore} T={T}/>
+            <Bar2 label="Temp." v={result.tempScore} T={T}/>
+          </div>
+        </div>
+        {result.isPerfect
+          ?<div style={{fontSize:18,color:T.green,letterSpacing:'0.1em',fontWeight:700}}>✓ EXTRACTION PARFAITE</div>
+          :<>
+            {result.suggestions.map((s,i)=><div key={i} style={{fontFamily:'monospace',fontSize:11,color:T.textDim,background:T.bg,border:`1px solid ${T.border}`,padding:'7px 10px',borderRadius:4,marginBottom:6}}>{s}</div>)}
+            {(result.newTemp!==temp||result.newPreInfSec!==preInfSec)&&(
+              <div style={{fontFamily:'monospace',fontSize:11,color:MC,marginTop:4,display:'flex',gap:12,flexWrap:'wrap'}}>
+                {result.newTemp!==temp&&<span>Temp → {result.newTemp}°C</span>}
+                {result.newPreInfSec!==preInfSec&&<span>Pre-inf → {result.newPreInfSec}s</span>}
+              </div>
+            )}
+            <button onClick={applyResult} style={{marginTop:12,padding:'13px 20px',border:`1px solid ${MC}`,background:`${MC}22`,color:MC,borderRadius:4,cursor:'pointer',fontSize:13,letterSpacing:'0.1em',fontWeight:700,width:'100%',touchAction:'manipulation'}}>
+              ⬤ APPLIQUER LES AJUSTEMENTS
+            </button>
+          </>
+        }
+      </>)}
+    </div>
+
+    {/* TEMPÉRATURE */}
+    <div style={{...card(T),alignItems:'center'}}>
+      <div style={SL(T)}>Température d'extraction</div>
+      <Dial value={temp} range={[85,96]} color={MC} T={T}/>
+      <div style={{fontFamily:'monospace',fontSize:32,fontWeight:300,color:MC,textShadow:`0 0 22px ${MC}66`,marginTop:4,marginBottom:12}}>
+        {temp}<span style={{fontSize:13,color:T.textDim,marginLeft:4}}>°C</span>
+      </div>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={()=>setTemp(t=>clamp(t-1,85,96))} style={dBtn(MC,T)}>−1°C</button>
+        <button onClick={()=>setTemp(t=>clamp(t+1,85,96))} style={dBtn(MC,T)}>+1°C</button>
+      </div>
+      <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:8}}>plage 85–96°C · optimal 91–94°C</div>
+    </div>
+
+    {/* RESET CALIBRATION */}
+    <div style={{marginTop:8,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
+      {!resetConfirm
+        ?<button onClick={()=>{setResetConfirm(true);setTimeout(()=>setResetConfirm(false),3000)}} style={{width:'100%',padding:'11px 0',background:`${T.red}12`,border:`1px solid ${T.red}88`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.2em',fontWeight:600,touchAction:'manipulation'}}>↺ RESET CALIBRATION</button>
+        :<div style={{display:'flex',gap:8}}>
+          <button onClick={()=>setResetConfirm(false)} style={{flex:1,padding:'11px 0',background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',touchAction:'manipulation'}}>ANNULER</button>
+          <button onClick={()=>{setFeedback(null);setFlash(null);setLiveWeight(0);setResetConfirm(false);onReset()}} style={{flex:1,padding:'11px 0',background:`${T.red}22`,border:`1px solid ${T.red}`,color:T.red,borderRadius:5,cursor:'pointer',fontSize:11,letterSpacing:'0.1em',fontWeight:700,touchAction:'manipulation'}}>CONFIRMER RESET</button>
+        </div>
+      }
+    </div>
+  </>)
+}
+
+// ─── NOTES DE DÉGUSTATION ─────────────────────────────────────────────────────
+function TastingNotes({ notes, setNotes, onSave, T }) {
+  const [open,setOpen]=useState(false)
+  const [saved,setSaved]=useState(false)
+  const n=notes||{body:0,sweetness:0,finish:0,aromas:[]}
+  const has=(n.body||0)>0||(n.sweetness||0)>0||(n.finish||0)>0||(n.aromas?.length||0)>0
+  const toggleAroma=a=>{
+    const cur=n.aromas||[]
+    const next=cur.includes(a)?cur.filter(x=>x!==a):[...cur,a]
+    setNotes({...n,aromas:next})
+  }
+  const Slider=({label,value,onChange,color})=>(
+    <div style={{marginBottom:10}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+        <span style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase'}}>{label}</span>
+        <span style={{fontFamily:'monospace',fontSize:11,color:value>0?color:T.textMute,fontWeight:700}}>{value}/5</span>
+      </div>
+      <div style={{display:'flex',gap:4}}>
+        {[1,2,3,4,5].map(v=>(
+          <button key={v} onClick={()=>onChange(value===v?0:v)} style={{
+            flex:1,padding:'8px 0',borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'monospace',fontWeight:700,
+            border:`1px solid ${value>=v?color:T.border}`,
+            background:value>=v?`${color}22`:T.bg3,
+            color:value>=v?color:T.textMute,
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>{v}</button>
+        ))}
+      </div>
+    </div>
+  )
+  return (
+    <div style={card(T)}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{...SL(T),marginBottom:0}}>👅 Notes de dégustation {has&&<span style={{color:T.gold,marginLeft:4}}>●</span>}</div>
+        <div style={{fontSize:18,color:T.textMute,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',lineHeight:1}}>▾</div>
+      </div>
+      {!open&&has&&(
+        <div style={{marginTop:8,fontFamily:'monospace',fontSize:11,color:T.textDim}}>
+          {n.body>0&&<span>Corps {n.body}/5 · </span>}
+          {n.sweetness>0&&<span>Sucrosité {n.sweetness}/5 · </span>}
+          {n.finish>0&&<span>Finale {n.finish}/5</span>}
+          {n.aromas?.length>0&&<div style={{marginTop:4,color:T.gold}}>{n.aromas.join(', ')}</div>}
+        </div>
+      )}
+      {open&&(
+        <div style={{marginTop:14}}>
+          <Slider label="Corps"      value={n.body||0}      onChange={v=>setNotes({...n,body:v})}      color={T.purple}/>
+          <Slider label="Sucrosité"  value={n.sweetness||0} onChange={v=>setNotes({...n,sweetness:v})} color={T.green}/>
+          <Slider label="Finale"     value={n.finish||0}    onChange={v=>setNotes({...n,finish:v})}    color={T.blue}/>
+          <div style={{marginTop:14,fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:8}}>Arômes</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {AROMAS.map(a=>{
+              const sel=(n.aromas||[]).includes(a)
+              return (
+                <button key={a} onClick={()=>toggleAroma(a)} style={{
+                  padding:'5px 10px',borderRadius:14,cursor:'pointer',fontSize:11,fontFamily:'monospace',
+                  border:`1px solid ${sel?T.gold:T.border}`,
+                  background:sel?`${T.gold}22`:T.bg3,
+                  color:sel?T.gold:T.textDim,
+                  touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                }}>{a}</button>
+              )
+            })}
+          </div>
+          {onSave&&(
+            <button onClick={()=>{onSave();setSaved(true);setTimeout(()=>setSaved(false),1800)}} style={{
+              marginTop:16,width:'100%',padding:'12px 0',
+              background:saved?`${T.green}22`:`${T.gold}18`,
+              border:`1px solid ${saved?T.green:T.gold}`,
+              color:saved?T.green:T.gold,borderRadius:5,cursor:'pointer',
+              fontSize:12,letterSpacing:'0.15em',fontWeight:700,
+              touchAction:'manipulation',transition:'all 0.2s',
+            }}>{saved?'✓ SAUVEGARDÉ':'💾 SAUVEGARDER'}</button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── PARTAGE / EXPORT MODAL ───────────────────────────────────────────────────
+function ShareModal({ entry, onClose, T }){
+  const url=recipeShareUrl(entry)
+  const [copied,setCopied]=useState(false)
+  const qr=`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`
+  const copy=async()=>{
+    try{await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{}
+  }
+  const summary=[
+    entry.coffee?.name?`☕ ${entry.coffee.name}`:null,
+    entry.mode==='moulin'?`⚙ ${entry.method||''} · mouture ${entry.grind||'-'}µm`:null,
+    entry.mode==='machine'?`☕ ${entry.dose||'-'}g → ${entry.yld||'-'}g · ${entry.time||'-'}s · ${entry.temp||'-'}°C`:null,
+    typeof entry.score==='number'?`Score ${entry.score}/100`:null,
+  ].filter(Boolean).join('  ·  ')
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:420,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:12,padding:'20px 18px',boxShadow:`0 8px 32px ${T.shadow}`}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontSize:12,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700}}>📤 Partager la recette</div>
+          <button onClick={onClose} style={{background:'none',border:'none',color:T.textMute,fontSize:20,cursor:'pointer',padding:'0 4px'}}>✕</button>
+        </div>
+        <div style={{fontFamily:'monospace',fontSize:11,color:T.textDim,marginBottom:14,lineHeight:1.5}}>{summary}</div>
+        <div style={{display:'flex',justifyContent:'center',marginBottom:14}}>
+          <div style={{padding:8,background:'#fff',borderRadius:8}}>
+            <img src={qr} width={200} height={200} alt="QR code" onError={e=>{e.target.style.display='none'}} style={{display:'block'}}/>
+          </div>
+        </div>
+        <div style={{fontSize:9,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:6}}>Lien</div>
+        <div style={{fontFamily:'monospace',fontSize:10,color:T.textDim,background:T.bg3,border:`1px solid ${T.border}`,borderRadius:4,padding:'8px 10px',marginBottom:10,wordBreak:'break-all',maxHeight:80,overflowY:'auto'}}>{url}</div>
+        <button onClick={copy} style={{width:'100%',padding:'12px 0',background:copied?`${T.green}22`:`${T.gold}22`,border:`1px solid ${copied?T.green:T.gold}`,color:copied?T.green:T.gold,borderRadius:4,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,touchAction:'manipulation'}}>
+          {copied?'✓ COPIÉ':'📋 COPIER LE LIEN'}
+        </button>
+        <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,marginTop:10,textAlign:'center'}}>Hors-ligne : copie le lien · QR généré en ligne</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── A/B COMPARE MODAL ────────────────────────────────────────────────────────
+function CompareModal({ a, b, onClose, T }){
+  const Row=({label,va,vb,unit=''})=>{
+    if(va==null&&vb==null)return null
+    const same=va===vb
+    return (
+      <div style={{display:'grid',gridTemplateColumns:'1fr 90px 90px',gap:6,padding:'7px 0',borderBottom:`1px solid ${T.border}`,alignItems:'center'}}>
+        <div style={{fontSize:10,letterSpacing:'0.15em',color:T.textMute,textTransform:'uppercase'}}>{label}</div>
+        <div style={{fontFamily:'monospace',fontSize:13,color:same?T.textDim:T.gold,textAlign:'right',fontWeight:same?400:700}}>{va??'—'}{va!=null?unit:''}</div>
+        <div style={{fontFamily:'monospace',fontSize:13,color:same?T.textDim:T.blue,textAlign:'right',fontWeight:same?400:700}}>{vb??'—'}{vb!=null?unit:''}</div>
+      </div>
+    )
+  }
+  const winner=(a.score||0)===(b.score||0)?null:(a.score||0)>(b.score||0)?'A':'B'
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:480,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:12,padding:'20px 18px',boxShadow:`0 8px 32px ${T.shadow}`,maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontSize:12,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700}}>⇄ Comparaison A/B</div>
+          <button onClick={onClose} style={{background:'none',border:'none',color:T.textMute,fontSize:20,cursor:'pointer',padding:'0 4px'}}>✕</button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 90px 90px',gap:6,marginBottom:8}}>
+          <div></div>
+          <div style={{textAlign:'right',fontSize:10,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700}}>A {winner==='A'&&'🏆'}</div>
+          <div style={{textAlign:'right',fontSize:10,letterSpacing:'0.2em',color:T.blue,textTransform:'uppercase',fontWeight:700}}>B {winner==='B'&&'🏆'}</div>
+        </div>
+        <Row label="Mode"     va={a.mode}    vb={b.mode}/>
+        <Row label="Café"     va={a.coffee?.name||'—'}     vb={b.coffee?.name||'—'}/>
+        <Row label="Méthode"  va={a.method||'—'}           vb={b.method||'—'}/>
+        <Row label="Dose"     va={a.dose}    vb={b.dose}    unit="g"/>
+        <Row label="Yield"    va={a.yld}     vb={b.yld}     unit="g"/>
+        <Row label="Ratio"    va={a.dose&&a.yld?(a.yld/a.dose).toFixed(2):null} vb={b.dose&&b.yld?(b.yld/b.dose).toFixed(2):null}/>
+        <Row label="Temps"    va={a.time}    vb={b.time}    unit="s"/>
+        <Row label="Temp."    va={a.temp}    vb={b.temp}    unit="°C"/>
+        <Row label="Pre-Inf"  va={a.preInfSec?`${a.preInfSec}s/${a.preInfPct}%`:null} vb={b.preInfSec?`${b.preInfSec}s/${b.preInfPct}%`:null}/>
+        <Row label="Mouture"  va={a.grind}   vb={b.grind}   unit="µm"/>
+        <Row label="Score"    va={a.score}   vb={b.score}   unit="/100"/>
+        <Row label="Goût"     va={a.taste||'—'}  vb={b.taste||'—'}/>
+        <Row label="Corps"    va={a.notes?.body||null}      vb={b.notes?.body||null}      unit="/5"/>
+        <Row label="Sucrosité"  va={a.notes?.sweetness||null} vb={b.notes?.sweetness||null} unit="/5"/>
+        <Row label="Finale"   va={a.notes?.finish||null}    vb={b.notes?.finish||null}    unit="/5"/>
+        {(a.notes?.aromas?.length||b.notes?.aromas?.length)>0&&(
+          <div style={{padding:'8px 0',fontFamily:'monospace',fontSize:10,color:T.textDim}}>
+            <div><span style={{color:T.gold}}>A —</span> {a.notes?.aromas?.join(', ')||'—'}</div>
+            <div style={{marginTop:4}}><span style={{color:T.blue}}>B —</span> {b.notes?.aromas?.join(', ')||'—'}</div>
+          </div>
+        )}
+        {winner&&<div style={{marginTop:14,padding:10,background:`${T.green}15`,border:`1px solid ${T.green}66`,borderRadius:6,fontFamily:'monospace',fontSize:12,color:T.green,textAlign:'center'}}>🏆 Shot {winner} gagne (+{Math.abs((a.score||0)-(b.score||0))} pts)</div>}
+      </div>
+    </div>
+  )
+}
+
+// ─── ANALYTICS / DASHBOARD ────────────────────────────────────────────────────
+function TabAnalytics({ history, T }){
+  const stats=analyzeHistory(history)
+  if(!stats||!stats.total){
+    return <div style={{textAlign:'center',color:T.textMute,padding:48,fontSize:13}}>Pas encore de données — sauvegarde quelques shots pour voir les tendances.</div>
+  }
+  const { total, avgScore, perfectPct, byMode, byMethod, byCoffee, series }=stats
+  const mColors={espresso:T.gold,filter:T.blue,aeropress:T.green,chemex:T.purple,moka:T.orange,machine:MC,moulin:T.gold}
+
+  // SVG line chart
+  const W=440, H=120, P=8
+  const xs=series.length>1?series.map((_,i)=>P+i*((W-2*P)/(series.length-1))):[W/2]
+  const ys=series.map(s=>H-P-(s.score/100)*(H-2*P))
+  const path=series.length?xs.map((x,i)=>`${i===0?'M':'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' '):''
+  const area=series.length>1?`${path} L${xs[xs.length-1]},${H-P} L${xs[0]},${H-P} Z`:''
+
+  const sortedCoffees=Object.entries(byCoffee).sort((a,b)=>b[1].bestScore-a[1].bestScore).slice(0,8)
+  const methodEntries=Object.entries(byMethod).sort((a,b)=>b[1]-a[1])
+  const maxMethod=Math.max(1,...methodEntries.map(([,n])=>n))
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{padding:'12px 16px',background:`${T.gold}12`,border:`1px solid ${T.gold}44`,borderRadius:8}}>
+        <div style={{fontSize:12,fontWeight:700,color:T.gold,letterSpacing:'0.15em',textTransform:'uppercase',marginBottom:4}}>📊 Analytics</div>
+        <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>Tendances et progression sur l'ensemble de tes shots sauvegardés.</div>
+      </div>
+
+      {/* KPI cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
+        {[
+          {label:'Shots',value:total,color:T.gold},
+          {label:'Score moyen',value:avgScore,suffix:'/100',color:avgScore>=85?T.green:avgScore>=70?T.gold:T.orange},
+          {label:'% Parfaits',value:perfectPct,suffix:'%',color:T.green},
+        ].map((k,i)=>(
+          <div key={i} style={{padding:'14px 10px',background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,textAlign:'center',boxShadow:`0 2px 8px ${T.shadow}`}}>
+            <div style={{fontSize:9,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:6}}>{k.label}</div>
+            <div style={{fontFamily:'monospace',fontSize:24,fontWeight:300,color:k.color,lineHeight:1}}>{k.value}<span style={{fontSize:11,color:T.textDim,marginLeft:2}}>{k.suffix||''}</span></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Score over time */}
+      <div style={{padding:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,boxShadow:`0 2px 8px ${T.shadow}`}}>
+        <div style={{...SL(T)}}>📈 Score dans le temps ({series.length} shots scorés)</div>
+        {series.length<2?(
+          <div style={{padding:30,textAlign:'center',color:T.textMute,fontSize:12}}>Au moins 2 shots scorés requis</div>
+        ):(
+          <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{marginTop:6}}>
+            {[25,50,75].map(y=>(
+              <line key={y} x1={P} x2={W-P} y1={H-P-(y/100)*(H-2*P)} y2={H-P-(y/100)*(H-2*P)} stroke={T.border} strokeDasharray="3 3"/>
+            ))}
+            <line x1={P} x2={W-P} y1={H-P-(90/100)*(H-2*P)} y2={H-P-(90/100)*(H-2*P)} stroke={T.green} strokeOpacity="0.4" strokeDasharray="4 2"/>
+            <path d={area} fill={T.gold} fillOpacity="0.12"/>
+            <path d={path} fill="none" stroke={T.gold} strokeWidth="2"/>
+            {xs.map((x,i)=>(
+              <circle key={i} cx={x} cy={ys[i]} r="3" fill={mColors[series[i].mode]||T.gold} stroke={T.bg2} strokeWidth="1.5"/>
+            ))}
+          </svg>
+        )}
+        <div style={{display:'flex',justifyContent:'space-between',fontFamily:'monospace',fontSize:9,color:T.textMute,marginTop:4}}>
+          <span>← Plus ancien</span><span style={{color:T.green}}>seuil parfait 90+</span><span>Récent →</span>
+        </div>
+      </div>
+
+      {/* Méthodes */}
+      {methodEntries.length>0&&(
+        <div style={{padding:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,boxShadow:`0 2px 8px ${T.shadow}`}}>
+          <div style={SL(T)}>⚙ Shots par méthode</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:6}}>
+            {methodEntries.map(([m,n])=>{
+              const c=mColors[m]||T.gold
+              const pct=Math.round(n/maxMethod*100)
+              return (
+                <div key={m}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                    <span style={{fontFamily:'monospace',fontSize:11,color:c,fontWeight:700,textTransform:'uppercase'}}>{m}</span>
+                    <span style={{fontFamily:'monospace',fontSize:10,color:T.textMute}}>{n} shot{n>1?'s':''}</span>
+                  </div>
+                  <div style={{height:6,background:T.bg3,borderRadius:3,overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${pct}%`,background:c,borderRadius:3}}/>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:10,paddingTop:10,borderTop:`1px solid ${T.border}`,fontFamily:'monospace',fontSize:10,color:T.textMute}}>
+            <span>⚙ Moulin · {byMode.moulin||0}</span>
+            <span>☕ Machine · {byMode.machine||0}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Top cafés */}
+      {sortedCoffees.length>0&&(
+        <div style={{padding:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,boxShadow:`0 2px 8px ${T.shadow}`}}>
+          <div style={SL(T)}>☕ Meilleurs scores par café</div>
+          <div style={{display:'flex',flexDirection:'column',gap:6,marginTop:6}}>
+            {sortedCoffees.map(([name,c])=>{
+              const bestGrind=Object.entries(c.grinds||{}).sort((a,b)=>b[1]-a[1])[0]?.[0]
+              return (
+                <div key={name} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 10px',background:T.bg3,border:`1px solid ${T.border}`,borderRadius:5}}>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{fontFamily:'monospace',fontSize:12,color:T.gold,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{name}</div>
+                    <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:2}}>{c.count} shot{c.count>1?'s':''}{bestGrind?` · mouture top ${bestGrind}µm`:''}</div>
+                  </div>
+                  <div style={{fontFamily:'monospace',fontSize:14,fontWeight:700,color:c.bestScore>=90?T.green:c.bestScore>=70?T.gold:T.orange,marginLeft:10}}>{c.bestScore}<span style={{fontSize:9,color:T.textMute}}>/100</span></div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── HISTORIQUE ───────────────────────────────────────────────────────────────
+function StarRating({ rating=0, onRate, T }) {
+  const [hover,setHover]=useState(0)
+  return (
+    <div onClick={e=>e.stopPropagation()} style={{display:'flex',gap:2,alignItems:'center'}}>
+      {[1,2,3,4,5].map(n=>(
+        <button key={n}
+          onClick={e=>{e.stopPropagation();onRate(rating===n?0:n)}}
+          onMouseEnter={()=>setHover(n)} onMouseLeave={()=>setHover(0)}
+          style={{background:'none',border:'none',padding:'2px 1px',cursor:'pointer',fontSize:16,lineHeight:1,color:(hover||rating)>=n?T.gold:T.border2,touchAction:'manipulation',WebkitTapHighlightColor:'transparent',transition:'color 0.1s'}}>
+          ★
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TabHistory({ history, onDelete, onRate, onApply, T }) {
+  const [selected,setSelected]=useState(new Set())
+  const [shareEntry,setShareEntry]=useState(null)
+  const [compare,setCompare]=useState(null)
+  const toggle=id=>setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})
+  const deleteSelected=()=>{onDelete([...selected]);setSelected(new Set())}
+  const compareSelected=()=>{
+    const ids=[...selected]
+    if(ids.length!==2)return
+    const a=history.find(h=>h.id===ids[0]); const b=history.find(h=>h.id===ids[1])
+    if(a&&b){
+      const [first,second]=a.id<b.id?[a,b]:[b,a]
+      setCompare({a:first,b:second})
+    }
+  }
+  const mColors={espresso:T.gold,filter:T.blue,aeropress:T.green,chemex:T.purple,moka:T.orange}
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {shareEntry&&<ShareModal entry={shareEntry} onClose={()=>setShareEntry(null)} T={T}/>}
+      {compare&&<CompareModal a={compare.a} b={compare.b} onClose={()=>setCompare(null)} T={T}/>}
+      {selected.size>0&&(
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,padding:'10px 14px',background:`${T.red}15`,border:`1px solid ${T.red}55`,borderRadius:6,marginBottom:4,flexWrap:'wrap'}}>
+          <span style={{fontSize:13,color:T.text,fontWeight:600}}>{selected.size} sélectionné{selected.size>1?'s':''}</span>
+          <div style={{display:'flex',gap:6}}>
+            {selected.size===2&&<button onClick={compareSelected} style={{padding:'7px 14px',background:T.blue,border:'none',color:'#fff',borderRadius:4,cursor:'pointer',fontSize:12,fontWeight:700,letterSpacing:'0.1em',touchAction:'manipulation'}}>⇄ Comparer A/B</button>}
+            <button onClick={deleteSelected} style={{padding:'7px 14px',background:T.red,border:'none',color:'#fff',borderRadius:4,cursor:'pointer',fontSize:12,fontWeight:700,letterSpacing:'0.1em',touchAction:'manipulation'}}>🗑 Supprimer</button>
+          </div>
+        </div>
+      )}
+      {history.length===0
+        ?<div style={{textAlign:'center',color:T.textMute,padding:48,fontSize:13}}>Aucun shot enregistré</div>
+        :history.map((h,i)=>{
+          const isMoulin=h.mode==='moulin'
+          const hm=isMoulin&&h.method?BREW_METHODS[h.method]:null
+          const ac=isMoulin?(hm?mColors[h.method]||T.gold:T.gold):MC
+          const tasteIcon=h.taste==='acid'?'🍋':h.taste==='bitter'?'☕':h.taste==='perfect'?'✨':''
+          const isSel=selected.has(h.id)
+          const gLabel=h.grinderId&&h.grinderId!=='none'&&GRINDERS[h.grinderId]?GRINDERS[h.grinderId].label:null
+          return (
+            <div key={h.id} onClick={()=>toggle(h.id)} style={{display:'flex',flexDirection:'column',gap:7,padding:'12px 14px',background:isSel?`${T.red}12`:i===0?T.bg3:T.bg2,border:`2px solid ${isSel?T.red:i===0?T.border2:T.border}`,borderRadius:8,cursor:'pointer',transition:'all 0.15s',WebkitTapHighlightColor:'transparent',boxShadow:`0 2px 8px ${T.shadow}`}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                <span style={{fontSize:11,fontWeight:700,letterSpacing:'0.12em',color:ac,background:`${ac}18`,border:`1px solid ${ac}44`,padding:'3px 9px',borderRadius:4}}>{isMoulin?'⚙ MOULIN':'☕ MACHINE'}</span>
+                <span style={{fontSize:10,color:T.textMute}}>{h.ts}</span>
+                {tasteIcon&&<span style={{fontSize:13}}>{tasteIcon}</span>}
+                <span style={{fontFamily:'monospace',fontSize:12,marginLeft:'auto',color:h.score>=90?T.green:h.score>=70?T.gold:T.red,fontWeight:700}}>{h.score}/100</span>
+              </div>
+              <div style={{display:'flex',gap:10,flexWrap:'wrap',fontFamily:'monospace',fontSize:11,color:T.textDim}}>
+                {hm&&<span style={{color:ac,fontWeight:600}}>{hm.icon} {hm.label}</span>}
+                <span>{h.dose}g→{h.yld}g</span>
+                <span>{formatTime(h.time)}</span>
+                {isMoulin&&h.grind&&<span style={{color:ac}}>{h.grind}µm</span>}
+                {!isMoulin&&h.temp&&<span style={{color:MC}}>{h.temp}°C · PI {h.preInfSec}s@{h.preInfPct}%</span>}
+              </div>
+              {gLabel&&<div style={{fontFamily:'monospace',fontSize:10,color:T.textMute}}>⚙ {gLabel}{h.grindValue?` · ${h.grindValue} ${GRINDERS[h.grinderId]?.unit}`:''}</div>}
+              {h.coffee?.name&&(()=>{
+                const fr=freshnessState(daysSinceRoast(h.coffee.roastDate),T)
+                return (
+                  <div style={{fontFamily:'monospace',fontSize:10,color:T.gold,display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                    <span>☕ {h.coffee.name}{h.coffee.country?` · ${h.coffee.country}`:''}{h.coffee.process?` · ${h.coffee.process}`:''}</span>
+                    {fr&&<span style={{padding:'1px 6px',background:`${fr.color}18`,border:`1px solid ${fr.color}55`,borderRadius:8,color:fr.color,fontSize:9}}>{fr.icon} {fr.label}</span>}
+                  </div>
+                )
+              })()}
+              {h.notes&&((h.notes.body||0)>0||(h.notes.sweetness||0)>0||(h.notes.finish||0)>0||(h.notes.aromas?.length||0)>0)&&(
+                <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,display:'flex',gap:8,flexWrap:'wrap'}}>
+                  {h.notes.body>0&&<span>👅 Corps {h.notes.body}/5</span>}
+                  {h.notes.sweetness>0&&<span>🍯 Suc. {h.notes.sweetness}/5</span>}
+                  {h.notes.finish>0&&<span>⏚ Fin. {h.notes.finish}/5</span>}
+                  {h.notes.aromas?.length>0&&<span style={{color:T.gold}}>· {h.notes.aromas.slice(0,3).join(', ')}{h.notes.aromas.length>3?'…':''}</span>}
+                </div>
+              )}
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:6,flexWrap:'wrap'}}>
+                <StarRating rating={h.rating||0} onRate={r=>onRate(h.id,r)} T={T}/>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <button onClick={e=>{e.stopPropagation();setShareEntry(h)}} style={{padding:'4px 8px',background:`${T.gold}18`,border:`1px solid ${T.gold}55`,color:T.gold,borderRadius:4,cursor:'pointer',fontSize:10,letterSpacing:'0.1em',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>📤</button>
+                  <button onClick={e=>{e.stopPropagation();onApply(h)}} style={{padding:'4px 10px',background:`${T.blue}18`,border:`1px solid ${T.blue}55`,color:T.blue,borderRadius:4,cursor:'pointer',fontSize:10,letterSpacing:'0.1em',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>↺ CHARGER</button>
+                  {isSel&&<div style={{fontSize:10,color:T.red,letterSpacing:'0.1em',fontWeight:600}}>✓ SÉLECTIONNÉ</div>}
+                </div>
+              </div>
+            </div>
+          )
+        })
+      }
+    </div>
+  )
+}
+
+// ─── RECETTES ────────────────────────────────────────────────────────────────
+
+function RecipeCard({recipe,T,grinder}){
+  const bc=BADGE_COLORS[recipe.badge.type]||BADGE_COLORS.standard
+  const paramLabels={coffee:'☕',water:'💧',ratio:'⚖',temperature:'🌡',grind:'⚙',totalTime:'⏱',equipment:'🔧'}
+
+  let convertedGrind=null
+  if(grinder && recipe.grindµm){
+    const µm=recipe.grindµm
+    if(µm>=grinder.minµm&&µm<=grinder.maxµm){
+      if(grinder.clicks){
+        const raw=(µm-grinder.minµm)/(grinder.maxµm-grinder.minµm)*grinder.clicks
+        const clics=grinder.unit==='rot'?Math.round(raw*10)/10:Math.round(raw)
+        convertedGrind=`${µm} µm · ${clics} ${grinder.unit}`
+      } else {
+        convertedGrind=`${µm} µm`
+      }
+    } else {
+      convertedGrind=`${µm} µm (hors plage)`
+    }
+  }
+
+  return(
+    <div style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:10,padding:16,marginBottom:14,boxShadow:`0 2px 8px ${T.shadow}`}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,marginBottom:10}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:14,fontWeight:700,color:T.text,lineHeight:1.3}}>{recipe.title}</div>
+          <div style={{fontSize:11,color:T.textDim,marginTop:3}}>{recipe.author}</div>
+        </div>
+        <span style={{flexShrink:0,background:bc.bg,color:bc.text,fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,letterSpacing:'0.05em',whiteSpace:'nowrap'}}>{recipe.badge.label}</span>
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:convertedGrind||(grinder&&!recipe.grindµm)?6:14}}>
+        {Object.entries(recipe.params).map(([k,v])=>(
+          <span key={k} style={{background:T.bg3,border:`1px solid ${T.border}`,color:T.textDim,fontSize:11,padding:'3px 9px',borderRadius:20}}>
+            {paramLabels[k]||''} {v}
+          </span>
+        ))}
+      </div>
+      {convertedGrind&&(
+        <div style={{marginBottom:14,padding:'7px 12px',background:`${T.green}15`,border:`1px solid ${T.green}44`,borderRadius:8,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+          <span style={{fontSize:10,color:T.green,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>⚙ {grinder.label}</span>
+          <span style={{fontSize:13,color:T.green,fontFamily:'monospace',fontWeight:700}}>{convertedGrind}</span>
+        </div>
+      )}
+      {grinder&&!recipe.grindµm&&(
+        <div style={{marginBottom:14,padding:'5px 12px',background:T.bg3,border:`1px solid ${T.border}`,borderRadius:8}}>
+          <span style={{fontSize:10,color:T.textMute}}>⚙ Réglage µm non disponible pour cette recette</span>
+        </div>
+      )}
+      <div style={{display:'flex',flexDirection:'column',gap:7,marginBottom:12}}>
+        {recipe.steps.map((s,i)=>(
+          <div key={i} style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+            <div style={{minWidth:52,flexShrink:0,color:T.gold,fontSize:10,fontWeight:700,fontFamily:'monospace',paddingTop:1}}>{s.time}</div>
+            <div style={{fontSize:12,color:T.text,lineHeight:1.5}}>{s.instruction}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{borderLeft:`3px solid ${T.gold}`,paddingLeft:10,paddingTop:6,paddingBottom:6,background:`${T.gold}12`,borderRadius:'0 6px 6px 0'}}>
+        <div style={{fontSize:11,color:T.textDim,lineHeight:1.5,fontStyle:'italic'}}>{recipe.tip}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── GÉNÉRATEUR DE RECETTES ──────────────────────────────────────────────────
+
+const ROAST_LEVELS = [
+  { id:'light',  label:'☀ Light',   color:'#d4b06a', tempDelta:+2, grindDelta:-25, ratioDelta:+0.5 },
+  { id:'medium', label:'◐ Medium',  color:'#b88040', tempDelta: 0, grindDelta:  0, ratioDelta: 0   },
+  { id:'dark',   label:'● Dark',    color:'#7a4020', tempDelta:-3, grindDelta:+30, ratioDelta:-0.5 },
+]
+
+const CUP_PROFILES = [
+  { id:'balanced',  label:'⚖ Équilibré',  tempDelta: 0, grindDelta:  0, ratioDelta: 0   },
+  { id:'fruity',    label:'🍓 Fruité',    tempDelta: 0, grindDelta:-15, ratioDelta:+0.3 },
+  { id:'citrus',    label:'🍋 Agrumes',   tempDelta:-1, grindDelta:-20, ratioDelta:+0.5 },
+  { id:'floral',    label:'🌸 Floral',    tempDelta:-1, grindDelta:-10, ratioDelta:+0.4 },
+  { id:'chocolate', label:'🍫 Chocolaté', tempDelta:+1, grindDelta:+20, ratioDelta:-0.3 },
+  { id:'sweet',     label:'🍯 Sucré',     tempDelta:+1, grindDelta:+10, ratioDelta:-0.2 },
+]
+
+const INTENSITIES = [
+  { id:'mild',     label:'Doux',      ratioDelta:+1.0 },
+  { id:'balanced', label:'Équilibre', ratioDelta: 0   },
+  { id:'strong',   label:'Corsé',     ratioDelta:-1.5 },
+]
+
+const GEN_METHODS = {
+  'v60':          { ratioBase:16,   grindBase:600,  tempBase:93, totalSec:200, dose:15 },
+  'switch':       { ratioBase:14,   grindBase:780,  tempBase:90, totalSec:180, dose:15 },
+  'chemex':       { ratioBase:16.5, grindBase:750,  tempBase:94, totalSec:280, dose:30 },
+  'french-press': { ratioBase:16,   grindBase:900,  tempBase:94, totalSec:540, dose:30 },
+  'aeropress':    { ratioBase:14,   grindBase:600,  tempBase:88, totalSec:120, dose:14 },
+  'fellow-aiden': { ratioBase:16,   grindBase:750,  tempBase:93, totalSec:240, dose:18 },
+  'drip':         { ratioBase:16,   grindBase:700,  tempBase:93, totalSec:300, dose:30 },
+  'kalita':       { ratioBase:17,   grindBase:700,  tempBase:94, totalSec:200, dose:20 },
+  'origami':      { ratioBase:16,   grindBase:700,  tempBase:93, totalSec:200, dose:16 },
+  'syphon':       { ratioBase:13,   grindBase:600,  tempBase:92, totalSec:80,  dose:23 },
+  'cold-brew':    { ratioBase:8,    grindBase:1050, tempBase:20, totalSec:50400, dose:80 },
+  'turkish':      { ratioBase:13,   grindBase:90,   tempBase:85, totalSec:210, dose:8  },
+}
+
+// Sélection d'un profil expert Fellow Aiden + adaptation selon café et objectif
+function fellowAidenProfile({roast,profile,intensity,coffee}){
+  const proc=String(coffee?.process||'').toLowerCase()
+  const isWashed=/lav|wash/.test(proc)
+  const isNatural=/nat/.test(proc)
+  const isHoney=/honey/.test(proc)
+  const isAnaero=/ana|ferment/.test(proc)
+  const ids=profile.ids||[]
+  const wantsClarity=ids.some(id=>['fruity','citrus','floral'].includes(id))
+  const wantsBody=ids.includes('chocolate')
+  const wantsSweet=ids.includes('sweet')
+  // 5 profils experts (cf. base profils Fellow Aiden)
+  let p
+  if(roast.id==='dark'){
+    p={name:'Medium-Dark Balanced',bloomRatio:2,bloomSec:28,pulses:2,flowStart:14,flowEnd:15,tempStart:92,tempEnd:90,pauseSec:8}
+  }else if(isWashed && wantsClarity){
+    p={name:'Washed Clarity',bloomRatio:3,bloomSec:30,pulses:2,flowStart:16,flowEnd:18,tempStart:94,tempEnd:94,pauseSec:6}
+  }else if(isNatural || isHoney){
+    p={name:'Natural Sweetness & Body',bloomRatio:2.5,bloomSec:48,pulses:3,flowStart:12,flowEnd:14,tempStart:94.5,tempEnd:92,pauseSec:10}
+  }else if(wantsClarity && (wantsSweet || wantsBody)){
+    p={name:'Hybrid Sweet Clarity (Onyx)',bloomRatio:3,bloomSec:50,pulses:3,flowStart:13,flowEnd:17,tempStart:94.5,tempEnd:91.5,pauseSec:8}
+  }else if(roast.id==='light'){
+    p={name:'Competition Modern',bloomRatio:3,bloomSec:40,pulses:3,flowStart:11,flowEnd:16,tempStart:96,tempEnd:93,pauseSec:8}
+  }else{
+    p={name:'Medium-Dark Balanced',bloomRatio:2,bloomSec:28,pulses:2,flowStart:14,flowEnd:15,tempStart:92,tempEnd:90,pauseSec:8}
+  }
+  // Adaptations
+  if(roast.id==='light'){p.tempStart+=1;p.tempEnd+=1}
+  if(roast.id==='dark'){p.tempStart-=1.5;p.tempEnd-=1.5}
+  if(isAnaero){p.tempStart-=0.5;p.tempEnd-=0.5;p.bloomSec=Math.max(p.bloomSec,40)}
+  if(wantsClarity){p.flowStart+=1;p.flowEnd+=1;p.pauseSec=Math.max(4,p.pauseSec-2)}
+  if(wantsBody){p.flowStart-=1;p.flowEnd-=1;p.pauseSec+=2}
+  if(wantsSweet){p.bloomSec+=5}
+  if(intensity.id==='strong'){p.flowStart-=0.5;p.flowEnd-=0.5}
+  if(intensity.id==='mild'){p.flowStart+=0.5;p.flowEnd+=0.5}
+  // Sécurité
+  p.flowStart=Math.max(8,Math.min(20,p.flowStart))
+  p.flowEnd=Math.max(8,Math.min(20,p.flowEnd))
+  p.tempStart=Math.max(85,Math.min(98,p.tempStart))
+  p.tempEnd=Math.max(85,Math.min(98,p.tempEnd))
+  return p
+}
+
+const STEP_BUILDERS = {
+  v60: ({dose,water,temp,grindµm,roast})=>{
+    const bloom=Math.round(dose*2.5)
+    const remain=water-bloom, p2=Math.round(remain*0.45), p3=Math.round(remain*0.35), p4=remain-p2-p3
+    return [
+      {time:'Avant', instruction:`Rincer le filtre à ${temp}°C. ${dose} g de café · mouture ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Bloom : verser ${bloom} g (${roast.id==='light'?'agitation vigoureuse':'swirl léger'}).`},
+      {time:'0:40',  instruction:`Verser ${p2} g (total ${bloom+p2} g) en spirale.`},
+      {time:'1:20',  instruction:`Verser ${p3} g (total ${bloom+p2+p3} g).`},
+      {time:'2:00',  instruction:`Dernière verse ${p4} g (total ${water} g). Swirl final.`},
+      {time:'~3:00', instruction:'Fin du tirage. Servir.'},
+    ]
+  },
+  switch: ({dose,water,temp,grindµm})=>{
+    const p1=Math.round(water*0.5), p2=water-p1
+    return [
+      {time:'Avant', instruction:`Rincer le filtre. ${dose} g · ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Switch FERMÉ. Verser ${p1} g à ${temp}°C.`},
+      {time:'1:30',  instruction:'Ouvrir le switch (drainage rapide).'},
+      {time:'2:00',  instruction:`Refermer. Verser ${p2} g à ${Math.max(70,temp-5)}°C. Infuser 30 sec.`},
+      {time:'2:30',  instruction:'Ouvrir le switch. Service.'},
+    ]
+  },
+  chemex: ({dose,water,temp,grindµm})=>{
+    const bloom=Math.round(dose*2)
+    return [
+      {time:'Avant', instruction:`Rincer le filtre épais (côté triple vers le bec). ${dose} g · ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Bloom : ${bloom} g à ${temp}°C. Stir doux.`},
+      {time:'0:45',  instruction:`Verser jusqu'à ${Math.round(water*0.6)} g en cercles concentriques.`},
+      {time:'1:30',  instruction:`Continuer jusqu'à ${water} g.`},
+      {time:'2:00',  instruction:'Stir clockwise + counter-clockwise. Tourbillonner.'},
+      {time:'~4:00', instruction:'Fin du tirage.'},
+    ]
+  },
+  'french-press': ({dose,water,temp,grindµm})=>([
+    {time:'Avant',   instruction:`Préchauffer la cafetière. ${dose} g · ${grindµm} µm.`},
+    {time:'0:00',    instruction:`Verser ${water} g à ${temp}°C en 10–15 sec.`},
+    {time:'4:00',    instruction:'Briser la croûte avec une cuillère. Écumer la mousse.'},
+    {time:'4:30',    instruction:'Couvrir sans plonger. Laisser décanter.'},
+    {time:'9:30',    instruction:'Pousser le piston jusqu\'à la surface du liquide (sans foncer).'},
+    {time:'10:00',   instruction:'Servir immédiatement.'},
+  ]),
+  aeropress: ({dose,water,temp,grindµm,intensity})=>{
+    const inverted=intensity.id!=='mild'
+    return [
+      {time:'Avant', instruction:`AeroPress en position ${inverted?'inversée':'standard'}. ${dose} g · ${grindµm} µm. Filtre rincé.`},
+      {time:'0:00',  instruction:`Verser ${water} g à ${temp}°C. Stir 5 sec.`},
+      {time:'0:30',  instruction:'Couvrir et laisser infuser.'},
+      {time:'1:30',  instruction:inverted?'Retourner sur la tasse. Presser doucement (~30 sec).':'Presser doucement (~30 sec).'},
+      {time:'2:00',  instruction:'Fin de l\'extraction.'},
+    ]
+  },
+  'fellow-aiden': ({dose,water,temp,grindµm,roast,profile,intensity,coffee})=>{
+    const profileSel=fellowAidenProfile({roast,profile,intensity,coffee})
+    const {bloomRatio,bloomSec,pulses,flowStart,flowEnd,tempStart,tempEnd,pauseSec,name}=profileSel
+    const bloomG=Math.round(dose*bloomRatio)
+    const remain=water-bloomG
+    const perPulse=Math.round(remain/pulses)
+    const stepFlow=pulses>1?(flowEnd-flowStart)/(pulses-1):0
+    const stepTemp=pulses>1?(tempEnd-tempStart)/(pulses-1):0
+    const fmt=(sec)=>{const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}:${String(s).padStart(2,'0')}`}
+    const steps=[
+      {time:'Avant', instruction:`Fellow Aiden — profil « ${name} ». ${dose} g · ${grindµm} µm · filtre rincé.`},
+      {time:'Bloom', instruction:`Verser ${bloomG} g à ${Math.round(tempStart)}°C (ratio 1:${bloomRatio}) · pause ${bloomSec}s.`},
+    ]
+    let cursor=bloomSec
+    for(let i=0;i<pulses;i++){
+      const flow=Math.round((flowStart+stepFlow*i)*10)/10
+      const t=Math.round((tempStart+stepTemp*i)*10)/10
+      const g=i===pulses-1?(remain-perPulse*(pulses-1)):perPulse
+      const dur=Math.max(3,Math.round(g/flow))
+      steps.push({time:fmt(cursor), instruction:`Pulse ${i+1} : ${g} g à ${t}°C · flow ${flow} ml/s (~${dur}s).`})
+      cursor+=dur
+      if(i<pulses-1){
+        steps.push({time:fmt(cursor), instruction:`Pause ${pauseSec}s — laisser percoler.`})
+        cursor+=pauseSec
+      }
+    }
+    steps.push({time:fmt(cursor), instruction:`Fin du tirage · total ~${fmt(cursor)} · ${water} g extraits.`})
+    return steps
+  },
+  drip: ({dose,water,temp,grindµm})=>([
+    {time:'Avant',    instruction:`Préchauffer la machine. Filtre rincé. ${grindµm} µm.`},
+    {time:'Mesure',   instruction:`${dose} g de café · ${water} g d'eau filtrée (50–150 mg/L TDS).`},
+    {time:'Brassage', instruction:`Cible température ${temp}°C. Programme normal (~4 min).`},
+    {time:'Service',  instruction:'Transvaser dans un thermos isotherme préchauffé.'},
+  ]),
+  kalita: ({dose,water,temp,grindµm})=>{
+    const bloom=Math.round(dose*2.5)
+    return [
+      {time:'Avant', instruction:`Rincer le filtre Wave. ${dose} g aplati · ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Bloom : ${bloom} g à ${temp}°C en cercles. Rao spin.`},
+      {time:'0:45',  instruction:`Verser jusqu'à ${Math.round(water*0.6)} g.`},
+      {time:'1:30',  instruction:`Verser jusqu'à ${water} g (niveau mi-haut).`},
+      {time:'2:00',  instruction:'Rao spin pour aplatir le lit.'},
+      {time:'~3:00', instruction:'Fin du tirage.'},
+    ]
+  },
+  origami: ({dose,water,temp,grindµm})=>{
+    const v=Math.round(water/4)
+    return [
+      {time:'Avant', instruction:`Filtre conique V60 dans l'Origami. ${dose} g · ${grindµm} µm.`},
+      {time:'0:00',  instruction:`Verser ${v} g à ${temp}°C.`},
+      {time:'0:30',  instruction:`Verser ${v} g (total ${v*2} g).`},
+      {time:'1:00',  instruction:`Verser ${v} g (total ${v*3} g).`},
+      {time:'1:30',  instruction:`Verser ${water-v*3} g (total ${water} g). Swirl final.`},
+      {time:'~3:00', instruction:'Fin du tirage.'},
+    ]
+  },
+  syphon: ({dose,water,temp,grindµm})=>([
+    {time:'Avant',   instruction:`Tremper le filtre tissu. ${dose} g · ${grindµm} µm.`},
+    {time:'Étape 1', instruction:`${water} g d'eau préchauffée dans la chambre basse. Brûleur allumé.`},
+    {time:'Étape 2', instruction:`Quand l'eau monte (~${temp}°C), ajouter le café. Stir 3 fois.`},
+    {time:'Étape 3', instruction:'Baisser le feu. Infuser ~60 sec. Stir doux pour briser la croûte.'},
+    {time:'Étape 4', instruction:'Éteindre. Retirer la chambre haute. Servir.'},
+  ]),
+  'cold-brew': ({dose,water,grindµm,intensity})=>{
+    const hours=intensity.id==='strong'?16:intensity.id==='mild'?12:14
+    return [
+      {time:'Étape 1', instruction:`${dose} g moulu grossier (${grindµm} µm) dans un bocal hermétique.`},
+      {time:'Étape 2', instruction:`Ajouter ${water} g d'eau froide filtrée. Remuer.`},
+      {time:'Étape 3', instruction:`Réfrigérateur ${hours} heures.`},
+      {time:'Étape 4', instruction:'Filtrer 2 fois : passoire fine puis filtre papier.'},
+      {time:'Service', instruction:'Diluer 1:1 (concentré:eau) selon l\'intensité voulue.'},
+    ]
+  },
+  turkish: ({dose,water,grindµm})=>([
+    {time:'Avant',   instruction:`Cezve cuivré. Mouture ultra-fine ${grindµm} µm (poudre).`},
+    {time:'Étape 1', instruction:`Mesurer ${water} g d'eau froide dans le cezve.`},
+    {time:'Étape 2', instruction:`Ajouter ${dose} g de café. Sucrer maintenant si désiré.`},
+    {time:'Étape 3', instruction:'Feu moyen. Stir 2-3 fois au début seulement.'},
+    {time:'Étape 4', instruction:'Surveiller la mousse. Avant débordement → retirer du feu.'},
+    {time:'Étape 5', instruction:'Répartir la mousse, remettre 10–15 sec puis verser.'},
+    {time:'Étape 6', instruction:'Attendre 2–3 min que le marc se dépose.'},
+  ]),
+}
+
+function buildGenTip({methodId,coffee,roast,profile,intensity}){
+  const parts=[]
+  if(methodId==='fellow-aiden'){
+    const fap=fellowAidenProfile({roast,profile,intensity,coffee})
+    parts.push(`Profil expert : « ${fap.name} ».`)
+    if(coffee?.process) parts.push(`Adapté process ${coffee.process}.`)
+    parts.push(`Bloom 1:${fap.bloomRatio}/${fap.bloomSec}s · ${fap.pulses} pulse${fap.pulses>1?'s':''} · flow ${fap.flowStart}→${fap.flowEnd} ml/s · pause ${fap.pauseSec}s.`)
+    if(roast.id==='light') parts.push("Light → température amplifiée, extraction progressive.")
+    if(roast.id==='dark')  parts.push('Dark → température abaissée, extraction réduite.')
+    if(intensity.id==='strong') parts.push('Ratio resserré · corps et intensité.')
+    if(intensity.id==='mild')   parts.push('Ratio dilué · clarté et longueur.')
+    parts.push('Résultat attendu : extraction progressive multi-phase, reproductible et alignée à l\'objectif sensoriel.')
+    return parts.join(' ')
+  }
+  if(coffee?.name) parts.push(`Optimisé pour ${coffee.name}${coffee.country?` (${coffee.country})`:''}.`)
+  if(coffee?.process) parts.push(`Process ${coffee.process}.`)
+  parts.push(`Profil ${roast.label} · ${profile.label} · ${intensity.label}.`)
+  if(roast.id==='light') parts.push("Café clair → eau plus chaude pour pousser l'extraction.")
+  if(roast.id==='dark')  parts.push('Café foncé → eau moins chaude pour limiter l\'amertume.')
+  if(intensity.id==='strong') parts.push('Ratio resserré pour intensifier le corps.')
+  if(intensity.id==='mild')   parts.push('Ratio dilué pour une tasse longue et claire.')
+  if(profile.ids.some(id=>['fruity','citrus','floral'].includes(id))) parts.push("Mouture légèrement plus fine pour révéler l'acidité.")
+  if(profile.ids.includes('chocolate')) parts.push('Mouture plus grossière pour mettre en avant le corps et le sucré.')
+  if(methodId==='cold-brew') parts.push('Filtration soignée recommandée pour une tasse limpide.')
+  return parts.join(' ')
+}
+
+// ─── COACH IA — DIAGNOSTIC SCA ITÉRATIF ───────────────────────────────────────
+// Matrice de diagnostic basée sur les protocoles SCA (Specialty Coffee Association)
+// Chaque feedback renvoie UN seul ajustement principal (principe : ne change qu'une variable
+// à la fois pour identifier précisément ce qui marche).
+const TASTE_FEEDBACKS = [
+  {id:'sour',       label:'Acide / aigre',       icon:'🍋', desc:'Goût agressif, citrique, manque de sucre',           diagnosis:'sous-extraction',     color:'#f4b942'},
+  {id:'bitter',     label:'Amer / âpre',         icon:'⚡', desc:'Amertume marquée, sec en bouche',                    diagnosis:'sur-extraction',      color:'#a05a2c'},
+  {id:'weak',       label:'Fade / aqueux',       icon:'💧', desc:'Manque de corps, eau colorée',                       diagnosis:'sous-développé',      color:'#6ab4d4'},
+  {id:'astringent', label:'Astringent / sec',    icon:'🌿', desc:'Sensation râpeuse, langue qui sèche',                diagnosis:'sur-extraction sévère',color:'#8c4a3b'},
+  {id:'flat',       label:'Sans relief',         icon:'➖', desc:'Plat, peu d\'arômes, ennuyeux',                      diagnosis:'extraction insuffisante',color:'#9b8e7e'},
+  {id:'heavy',      label:'Trop intense / lourd',icon:'🛢', desc:'Trop concentré, écrasant',                           diagnosis:'ratio trop serré',    color:'#5d4037'},
+  {id:'perfect',    label:'Équilibré ✓',         icon:'⭐', desc:'Doux, sucré, arômes nets',                           diagnosis:'extraction réussie',  color:'#7fb069'},
+]
+
+// Applique UN ajustement à une recette générée.
+// Stratégies par défaut (alterne action si déjà tentée précédemment dans l'historique).
+function adjustRecipe({recipe,methodId,tasteId,coffee,history=[]}){
+  if(tasteId==='perfect') return null // pas d'ajustement
+  const base=GEN_METHODS[methodId]; if(!base||!recipe) return null
+
+  // Récupère valeurs courantes depuis la recette
+  const dose=parseFloat(String(recipe.params.coffee).replace(/[^\d.]/g,''))||base.dose
+  const water=parseFloat(String(recipe.params.water).replace(/[^\d.]/g,''))||Math.round(dose*base.ratioBase)
+  const ratio=water/dose
+  const temp=parseFloat(String(recipe.params.temperature).replace(/[^\d.]/g,''))||base.tempBase
+  const grindµm=recipe.grindµm||base.grindBase
+
+  // Compte combien de fois chaque type d'action a été tenté
+  const tries=(action)=>history.filter(h=>h.action===action).length
+
+  // Heuristique de choix d'action — alterne grind/temp/ratio pour ne pas marteler la même variable
+  const pickAction=(candidates)=>{
+    let best=candidates[0],min=tries(best)
+    for(const c of candidates){const n=tries(c);if(n<min){best=c;min=n}}
+    return best
+  }
+
+  let action,delta,newGrind=grindµm,newTemp=temp,newRatio=ratio,newDose=dose,reason='',advice=''
+
+  if(tasteId==='sour'){
+    action=pickAction(['grind','temp','ratio'])
+    if(action==='grind'){newGrind=clamp(grindµm-50,80,1400);delta=`-50 µm (mouture plus fine)`;reason='Sous-extraction → particules trop grosses, l\'eau ne pénètre pas assez le marc.';advice='Reserre la mouture pour augmenter la surface de contact.'}
+    else if(action==='temp'){newTemp=clamp(temp+2,70,100);delta=`+2°C (${Math.round(newTemp)}°C)`;reason='Sous-extraction → l\'eau plus chaude extrait davantage de composés sucrés.';advice='Augmente la température.'}
+    else {newRatio=clamp(ratio+0.5,5,22);delta=`ratio 1:${newRatio.toFixed(1)} (plus dilué)`;reason='Augmenter le ratio prolonge le contact eau-café.';advice='Allonge le ratio.'}
+  } else if(tasteId==='bitter'||tasteId==='astringent'){
+    const severe=tasteId==='astringent'
+    action=pickAction(severe?['grind','temp']:['grind','temp','ratio'])
+    if(action==='grind'){const step=severe?75:50;newGrind=clamp(grindµm+step,80,1400);delta=`+${step} µm (mouture plus grossière)`;reason=`${severe?'Sur-extraction sévère':'Sur-extraction'} → l\'eau extrait des composés amers et astringents.`;advice='Élargis la mouture pour ralentir l\'extraction.'}
+    else if(action==='temp'){newTemp=clamp(temp-2,70,100);delta=`-2°C (${Math.round(newTemp)}°C)`;reason='Sur-extraction → eau trop chaude qui sur-développe l\'amertume.';advice='Baisse la température.'}
+    else {newRatio=clamp(ratio-0.5,5,22);delta=`ratio 1:${newRatio.toFixed(1)} (plus serré)`;reason='Réduire le ratio raccourcit le temps d\'extraction.';advice='Resserre le ratio.'}
+  } else if(tasteId==='weak'||tasteId==='flat'){
+    action=pickAction(['grind','ratio','temp'])
+    if(action==='grind'){newGrind=clamp(grindµm-40,80,1400);delta=`-40 µm (mouture plus fine)`;reason='Extraction insuffisante → augmenter la surface de contact donne plus de corps.';advice='Affine la mouture.'}
+    else if(action==='ratio'){newRatio=clamp(ratio-1,5,22);delta=`ratio 1:${newRatio.toFixed(1)} (plus serré)`;reason='Trop dilué → resserre le ratio pour densifier la tasse.';advice='Resserre le ratio.'}
+    else {newTemp=clamp(temp+1.5,70,100);delta=`+1.5°C (${Math.round(newTemp*10)/10}°C)`;reason='Plus de chaleur → meilleure extraction des composés aromatiques.';advice='Augmente légèrement la température.'}
+  } else if(tasteId==='heavy'){
+    action=pickAction(['ratio','grind'])
+    if(action==='ratio'){newRatio=clamp(ratio+1,5,22);delta=`ratio 1:${newRatio.toFixed(1)} (plus dilué)`;reason='Tasse trop concentrée → allonger le ratio aère la finale.';advice='Allonge le ratio.'}
+    else {newGrind=clamp(grindµm+30,80,1400);delta=`+30 µm`;reason='Mouture plus grossière → extraction plus douce.';advice='Élargis la mouture.'}
+  }
+
+  // Recalcule water si ratio a changé
+  newDose=Math.round(dose*10)/10
+  const newWater=Math.round(newDose*newRatio)
+
+  // Reconstruit les steps avec les nouveaux paramètres
+  const roast={id:'medium',ratioDelta:0,grindDelta:0,tempDelta:0,label:'Medium'}
+  const profile={ids:['balanced'],label:'Balanced',tempDelta:0,grindDelta:0,ratioDelta:0}
+  const intensity={id:'balanced',ratioDelta:0,label:'Standard'}
+  const builder=STEP_BUILDERS[methodId]||STEP_BUILDERS.v60
+  const newSteps=builder({dose:newDose,water:newWater,ratio:newRatio,temp:newTemp,grindµm:newGrind,roast,profile,intensity,coffee})
+
+  return {
+    action,
+    delta,
+    reason,
+    advice,
+    recipe:{
+      ...recipe,
+      id:`coach-${methodId}-${Date.now()}`,
+      title:'Recette ajustée — Coach IA',
+      badge:{type:'generator',label:'🧠 Coach IA'},
+      params:{
+        ...recipe.params,
+        coffee:`${newDose} g`,
+        water:`${newWater} g`,
+        ratio:`1:${newRatio.toFixed(1)}`,
+        temperature:`${Math.round(newTemp*10)/10}°C`,
+      },
+      grindµm:newGrind,
+      steps:newSteps,
+      tip:`${reason} ${advice}`,
+    },
+  }
+}
+
+function generateRecipe({methodId,coffee,roastId,profileIds,intensityId,grinderId}){
+  const base=GEN_METHODS[methodId]; if(!base) return null
+  const roast    = ROAST_LEVELS.find(x=>x.id===roastId)    || ROAST_LEVELS[1]
+  const intensity= INTENSITIES.find(x=>x.id===intensityId) || INTENSITIES[1]
+
+  const selected = (profileIds||[]).map(id=>CUP_PROFILES.find(x=>x.id===id)).filter(Boolean)
+  const profilesList = selected.length ? selected : [CUP_PROFILES[0]]
+  const avg = key => profilesList.reduce((s,p)=>s+p[key],0)/profilesList.length
+  const profile = {
+    ids: profilesList.map(p=>p.id),
+    label: profilesList.map(p=>p.label).join(' + '),
+    tempDelta: avg('tempDelta'),
+    grindDelta: avg('grindDelta'),
+    ratioDelta: avg('ratioDelta'),
+  }
+
+  const dose=base.dose
+  const ratio=clamp(base.ratioBase+roast.ratioDelta+profile.ratioDelta+intensity.ratioDelta, 5, 22)
+  const water=Math.round(dose*ratio)
+  const grindµm=clamp(Math.round((base.grindBase+roast.grindDelta+profile.grindDelta)/5)*5, 80, 1400)
+  const temp=methodId==='cold-brew'
+    ? base.tempBase
+    : clamp(base.tempBase+roast.tempDelta+profile.tempDelta, 70, 100)
+
+  const builder=STEP_BUILDERS[methodId]||STEP_BUILDERS.v60
+  const steps=builder({dose,water,ratio,temp,grindµm,roast,profile,intensity,coffee})
+
+  const grinder=GRINDERS[grinderId]
+  const native=grinder&&grinder.label!=='— Sélectionner un moulin —'?µmToSetting(grindµm,grinder):null
+  const grindLabel=native!==null?`${grindµm} µm (${native} ${grinder.unit})`:`${grindµm} µm`
+
+  return {
+    id:`gen-${methodId}-${Date.now()}`,
+    method:methodId,
+    title:'Recette personnalisée',
+    author:coffee?.name?`Pour ${coffee.name}${coffee.country?` · ${coffee.country}`:''}`:'Générateur Torrea',
+    badge:{type:'generator',label:'✨ Générée'},
+    params:{
+      coffee:`${dose} g`,
+      water:`${water} g`,
+      ratio:`1:${ratio.toFixed(1)}`,
+      temperature:`${Math.round(temp)}°C`,
+      grind:grindLabel,
+      totalTime:formatTime(base.totalSec),
+    },
+    grindµm,
+    steps,
+    tip:buildGenTip({methodId,coffee,roast,profile,intensity}),
+  }
+}
+
+function RecipeGenerator({methodId,coffee,setCoffee,grinderId,T,onSave}){
+  const [open,setOpen]=useState(false)
+  const [roast,setRoast]=useState('medium')
+  const [profileIds,setProfileIds]=useState(['balanced'])
+  const [intensity,setIntensity]=useState('balanced')
+  const [generated,setGenerated]=useState(null)
+  const [justSaved,setJustSaved]=useState(false)
+  const [savingMode,setSavingMode]=useState(false)
+  const [customTitle,setCustomTitle]=useState('')
+  // Coach IA — actif par défaut sauvegardé en localStorage
+  const [coachOn,setCoachOn]=useState(()=>{try{return localStorage.getItem('torrea_coach_ia')==='1'}catch{return false}})
+  useEffect(()=>{try{localStorage.setItem('torrea_coach_ia',coachOn?'1':'0')}catch{}},[coachOn])
+  const [coachHistory,setCoachHistory]=useState([]) // [{action,delta,reason,advice,tasteId}]
+  const [showFeedback,setShowFeedback]=useState(false)
+  const [lastDiagnosis,setLastDiagnosis]=useState(null)
+
+  const toggleProfile=(id)=>{
+    setProfileIds(prev=>{
+      const next=prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]
+      return next.length===0?['balanced']:next
+    })
+  }
+
+  const onGenerate=()=>{
+    const r=generateRecipe({methodId,coffee,roastId:roast,profileIds,intensityId:intensity,grinderId})
+    setGenerated(r)
+    setJustSaved(false)
+    setSavingMode(false)
+    setCoachHistory([])
+    setLastDiagnosis(null)
+    setShowFeedback(coachOn)
+  }
+
+  const handleFeedback=(tasteId)=>{
+    if(tasteId==='perfect'){
+      const fb=TASTE_FEEDBACKS.find(t=>t.id==='perfect')
+      setLastDiagnosis({tasteId,action:null,delta:null,reason:'Bravo — extraction réussie. Sauvegarde cette recette pour la retrouver !',advice:'',label:fb.label,icon:fb.icon,color:fb.color})
+      setShowFeedback(false)
+      return
+    }
+    const adj=adjustRecipe({recipe:generated,methodId,tasteId,coffee,history:coachHistory})
+    if(!adj) return
+    const fb=TASTE_FEEDBACKS.find(t=>t.id===tasteId)
+    setGenerated(adj.recipe)
+    setCoachHistory(prev=>[...prev,{tasteId,action:adj.action,delta:adj.delta,reason:adj.reason,advice:adj.advice,label:fb.label,icon:fb.icon,color:fb.color}])
+    setLastDiagnosis({tasteId,action:adj.action,delta:adj.delta,reason:adj.reason,advice:adj.advice,label:fb.label,icon:fb.icon,color:fb.color})
+    setJustSaved(false)
+    setShowFeedback(false)
+  }
+
+  const handleSave=()=>{
+    if(!generated||justSaved) return
+    setSavingMode(true)
+    setCustomTitle(generated.title)
+  }
+
+  const handleConfirmSave=()=>{
+    if(!generated) return
+    const title=(customTitle||'').trim()||generated.title
+    const ok=onSave({...generated,title})
+    if(ok){setJustSaved(true);setSavingMode(false)}
+  }
+
+  const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
+  const SectionLabel=({children})=>(
+    <div style={{fontSize:10,letterSpacing:'0.2em',color:T.textMute,textTransform:'uppercase',marginBottom:8,marginTop:14}}>{children}</div>
+  )
+  const ChoiceBtn=({active,color,onClick,children})=>(
+    <button onClick={onClick} style={{
+      padding:'7px 12px',
+      border:`1px solid ${active?(color||T.gold):T.border}`,
+      background:active?`${color||T.gold}22`:T.bg,
+      color:active?(color||T.gold):T.textDim,
+      borderRadius:20,cursor:'pointer',fontSize:11,letterSpacing:'0.05em',
+      fontWeight:active?700:400,touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+    }}>{children}</button>
+  )
+
+  // Couleur "neon" du Coach IA quand actif (pulse subtil via filter+box-shadow)
+  const COACH_C='#9b6bff'
+
+  return (
+    <div style={{marginBottom:16,background:T.bg2,border:`1px solid ${coachOn?COACH_C:T.gold}55`,borderRadius:10,boxShadow:coachOn?`0 0 0 1px ${COACH_C}33, 0 4px 20px ${COACH_C}22`:`0 2px 8px ${T.shadow}`,overflow:'hidden',transition:'box-shadow 0.3s, border-color 0.3s'}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 14px',cursor:'pointer',background:coachOn?`${COACH_C}14`:`${T.gold}10`,transition:'background 0.3s'}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{fontSize:12,letterSpacing:'0.2em',textTransform:'uppercase',color:coachOn?COACH_C:T.gold,fontWeight:700}}>{coachOn?'🧠 Coach IA actif':'✨ Générateur de recette'}</div>
+          <div style={{fontSize:10,color:T.textDim,marginTop:2}}>{coachOn?'Génère puis ajuste itérativement selon ton goût en tasse':'Recette personnalisée selon café, torréfaction, profil et intensité'}</div>
+        </div>
+        <div style={{fontSize:18,color:coachOn?COACH_C:T.gold,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',marginLeft:8}}>▾</div>
+      </div>
+
+      {/* Bouton toggle Coach IA — bien en évidence */}
+      <div style={{padding:'10px 14px',background:coachOn?`${COACH_C}0d`:T.bg3,borderBottom:`1px solid ${coachOn?COACH_C:T.border}33`}}>
+        <button onClick={(e)=>{e.stopPropagation();setCoachOn(c=>!c);if(!coachOn&&generated)setShowFeedback(true)}} style={{
+          width:'100%',padding:'12px 14px',
+          border:`2px solid ${coachOn?COACH_C:T.border}`,
+          background:coachOn?`linear-gradient(135deg, ${COACH_C}33 0%, ${COACH_C}18 100%)`:T.bg2,
+          color:coachOn?COACH_C:T.textDim,
+          borderRadius:8,cursor:'pointer',
+          fontSize:13,fontWeight:800,letterSpacing:'0.15em',textTransform:'uppercase',
+          touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          display:'flex',alignItems:'center',justifyContent:'center',gap:10,
+          boxShadow:coachOn?`0 0 12px ${COACH_C}66, inset 0 0 8px ${COACH_C}22`:'none',
+          transition:'all 0.25s',
+        }}>
+          <span style={{
+            display:'inline-block',width:10,height:10,borderRadius:'50%',
+            background:coachOn?COACH_C:T.textMute,
+            boxShadow:coachOn?`0 0 8px ${COACH_C}, 0 0 14px ${COACH_C}88`:'none',
+            transition:'all 0.25s',
+          }}/>
+          {coachOn?'🧠 COACH IA · ACTIVÉ':'🧠 ACTIVER LE COACH IA'}
+        </button>
+        <div style={{marginTop:8,fontSize:10,color:T.textMute,fontFamily:'monospace',lineHeight:1.5,textAlign:'center'}}>
+          {coachOn
+            ? 'Après chaque essai, dis ce que tu as goûté → l\'app ajuste mouture / temp / ratio selon les protocoles SCA.'
+            : 'Active pour passer en mode itératif (feedback goût → ajustement précis).'}
+        </div>
+      </div>
+
+      {open&&(
+        <div style={{padding:'4px 14px 16px'}}>
+          <SectionLabel>① Café utilisé</SectionLabel>
+          <CoffeeCard coffee={coffee} setCoffee={setCoffee} T={T}/>
+
+          <SectionLabel>② Niveau de torréfaction</SectionLabel>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {ROAST_LEVELS.map(r=>(
+              <ChoiceBtn key={r.id} active={roast===r.id} color={r.color} onClick={()=>setRoast(r.id)}>{r.label}</ChoiceBtn>
+            ))}
+          </div>
+
+          <SectionLabel>③ Profil en tasse recherché <span style={{color:T.textDim,letterSpacing:0,textTransform:'none'}}>(plusieurs choix possibles)</span></SectionLabel>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {CUP_PROFILES.map(p=>(
+              <ChoiceBtn key={p.id} active={profileIds.includes(p.id)} color={T.blue} onClick={()=>toggleProfile(p.id)}>{p.label}</ChoiceBtn>
+            ))}
+          </div>
+
+          <SectionLabel>④ Intensité</SectionLabel>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {INTENSITIES.map(i=>(
+              <ChoiceBtn key={i.id} active={intensity===i.id} color={T.green} onClick={()=>setIntensity(i.id)}>{i.label}</ChoiceBtn>
+            ))}
+          </div>
+
+          {grinder&&(
+            <div style={{marginTop:14,fontFamily:'monospace',fontSize:10,color:T.textMute}}>
+              ⚙ Mouture convertie pour <span style={{color:T.gold}}>{grinder.label}</span>
+            </div>
+          )}
+
+          <button onClick={onGenerate} style={{
+            marginTop:14,width:'100%',padding:'13px 0',border:`1px solid ${coachOn?COACH_C:T.gold}`,
+            background:coachOn?`${COACH_C}22`:`${T.gold}22`,color:coachOn?COACH_C:T.gold,borderRadius:6,cursor:'pointer',
+            fontSize:13,letterSpacing:'0.18em',fontWeight:700,
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>
+            {coachOn?'🧠 GÉNÉRER & LANCER LE COACH':'✨ GÉNÉRER LA RECETTE'}
+          </button>
+        </div>
+      )}
+
+      {generated&&(
+        <div style={{padding:'4px 14px 14px'}}>
+          {/* Historique d'itérations Coach IA */}
+          {coachOn&&coachHistory.length>0&&(
+            <div style={{marginBottom:12,padding:'10px 12px',background:`${COACH_C}0d`,border:`1px solid ${COACH_C}44`,borderRadius:8}}>
+              <div style={{fontSize:9,letterSpacing:'0.2em',textTransform:'uppercase',color:COACH_C,fontWeight:700,marginBottom:6}}>🧠 Itérations Coach IA</div>
+              {coachHistory.map((h,i)=>(
+                <div key={i} style={{fontSize:11,color:T.textDim,marginBottom:4,fontFamily:'monospace',display:'flex',gap:8,alignItems:'flex-start'}}>
+                  <span style={{color:COACH_C,fontWeight:700,minWidth:24}}>#{i+1}</span>
+                  <span style={{flexShrink:0}}>{h.icon}</span>
+                  <span><span style={{color:h.color}}>{h.label}</span> → <span style={{color:T.gold}}>{h.delta}</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <RecipeCard recipe={generated} T={T} grinder={grinder}/>
+
+          {/* Bloc feedback Coach IA */}
+          {coachOn&&!showFeedback&&(
+            <button onClick={()=>setShowFeedback(true)} style={{
+              width:'100%',padding:'11px 0',marginTop:-4,marginBottom:8,
+              border:`1px solid ${COACH_C}`,background:`${COACH_C}11`,color:COACH_C,
+              borderRadius:6,cursor:'pointer',fontSize:12,letterSpacing:'0.15em',fontWeight:700,
+              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+            }}>
+              🧠 J'AI GOÛTÉ — AJUSTER LA RECETTE
+            </button>
+          )}
+
+          {coachOn&&showFeedback&&(
+            <div style={{marginTop:8,marginBottom:12,padding:'14px',background:`${COACH_C}0d`,border:`1px solid ${COACH_C}66`,borderRadius:8}}>
+              <div style={{fontSize:11,letterSpacing:'0.15em',textTransform:'uppercase',color:COACH_C,fontWeight:700,marginBottom:4}}>🧠 Coach IA — Comment était la tasse ?</div>
+              <div style={{fontSize:10,color:T.textDim,marginBottom:12,fontFamily:'monospace'}}>Choisis le goût dominant. L'app proposera UN ajustement précis (principe SCA : une variable à la fois).</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                {TASTE_FEEDBACKS.map(t=>(
+                  <button key={t.id} onClick={()=>handleFeedback(t.id)} style={{
+                    padding:'10px 10px',
+                    border:`1px solid ${t.color}66`,
+                    background:`${t.color}11`,
+                    color:t.color,
+                    borderRadius:6,cursor:'pointer',
+                    fontSize:11,fontWeight:700,textAlign:'left',
+                    touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                    display:'flex',flexDirection:'column',gap:3,
+                  }}>
+                    <span style={{fontSize:13}}>{t.icon} {t.label}</span>
+                    <span style={{fontSize:9,color:T.textMute,fontFamily:'monospace',fontWeight:400,letterSpacing:0}}>{t.desc}</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={()=>setShowFeedback(false)} style={{
+                marginTop:10,width:'100%',padding:'8px 0',
+                border:`1px solid ${T.border}`,background:'transparent',color:T.textMute,
+                borderRadius:6,cursor:'pointer',fontSize:11,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              }}>Annuler</button>
+            </div>
+          )}
+
+          {/* Diagnostic Coach IA */}
+          {coachOn&&lastDiagnosis&&!showFeedback&&(
+            <div style={{marginBottom:12,padding:'12px 14px',background:`${lastDiagnosis.color}11`,border:`1px solid ${lastDiagnosis.color}88`,borderRadius:8}}>
+              <div style={{fontSize:11,letterSpacing:'0.15em',textTransform:'uppercase',color:lastDiagnosis.color,fontWeight:700,marginBottom:6,display:'flex',alignItems:'center',gap:6}}>
+                <span style={{fontSize:16}}>{lastDiagnosis.icon}</span>
+                <span>Diagnostic : {lastDiagnosis.label}</span>
+              </div>
+              {lastDiagnosis.delta&&(
+                <div style={{fontSize:12,color:T.gold,fontWeight:700,fontFamily:'monospace',marginBottom:6}}>→ Ajustement appliqué : {lastDiagnosis.delta}</div>
+              )}
+              <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>{lastDiagnosis.reason}</div>
+              {lastDiagnosis.advice&&<div style={{marginTop:4,fontSize:11,color:T.text,lineHeight:1.5,fontStyle:'italic'}}>{lastDiagnosis.advice}</div>}
+            </div>
+          )}
+
+          {savingMode?(
+            <div style={{marginTop:4,display:'flex',gap:6}}>
+              <input
+                value={customTitle}
+                onChange={e=>setCustomTitle(e.target.value)}
+                onKeyDown={e=>{if(e.key==='Enter')handleConfirmSave();if(e.key==='Escape')setSavingMode(false)}}
+                placeholder="Nom de la recette"
+                autoFocus
+                style={{
+                  flex:1,padding:'10px 12px',fontFamily:'monospace',fontSize:12,
+                  background:T.bg,border:`1px solid ${T.gold}`,color:T.text,
+                  borderRadius:6,outline:'none',minWidth:0,
+                }}
+              />
+              <button onClick={handleConfirmSave} style={{
+                padding:'10px 14px',border:`1px solid ${T.green}`,background:`${T.green}22`,
+                color:T.green,borderRadius:6,cursor:'pointer',fontSize:13,fontWeight:700,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',flexShrink:0,
+              }}>✓</button>
+              <button onClick={()=>setSavingMode(false)} style={{
+                padding:'10px 14px',border:`1px solid ${T.border}`,background:'transparent',
+                color:T.textMute,borderRadius:6,cursor:'pointer',fontSize:13,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',flexShrink:0,
+              }}>✕</button>
+            </div>
+          ):(
+            <div style={{display:'flex',gap:6,marginTop:-4}}>
+              <button onClick={handleSave} disabled={justSaved} style={{
+                flex:1,padding:'11px 0',
+                border:`1px solid ${justSaved?T.green:T.gold}`,
+                background:justSaved?`${T.green}22`:`${T.gold}11`,
+                color:justSaved?T.green:T.gold,
+                borderRadius:6,cursor:justSaved?'default':'pointer',
+                fontSize:12,letterSpacing:'0.15em',fontWeight:700,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              }}>
+                {justSaved?'✓ RECETTE SAUVEGARDÉE':'💾 SAUVEGARDER CETTE RECETTE'}
+              </button>
+              <button onClick={()=>{setGenerated(null);setJustSaved(false);setSavingMode(false);setCoachHistory([]);setLastDiagnosis(null);setShowFeedback(false)}} title="Annuler / Recommencer" style={{
+                padding:'0 16px',
+                border:`1px solid ${T.border}`,background:T.bg3,color:T.textMute,
+                borderRadius:6,cursor:'pointer',fontSize:14,fontWeight:700,
+                touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                flexShrink:0,
+              }}>✕</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SavedRecipesPanel({savedRecipes,onDelete,T,grinder}){
+  const [open,setOpen]=useState(false)
+  const count=savedRecipes.length
+  const empty=count===0
+  return(
+    <div style={{background:T.bg2,border:`1px solid ${T.gold}55`,borderRadius:10,boxShadow:`0 2px 8px ${T.shadow}`,overflow:'hidden',opacity:empty?0.6:1}}>
+      <div onClick={()=>!empty&&setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 14px',cursor:empty?'default':'pointer',background:`${T.gold}10`}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{fontSize:12,letterSpacing:'0.2em',textTransform:'uppercase',color:T.gold,fontWeight:700}}>⭐ Mes recettes ({count})</div>
+          <div style={{fontSize:10,color:T.textDim,marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{empty?'Sauvegarde une recette pour la retrouver ici':`${count} recette${count>1?'s':''} sauvegardée${count>1?'s':''}`}</div>
+        </div>
+        {!empty&&<div style={{fontSize:18,color:T.gold,transform:open?'rotate(180deg)':'none',transition:'transform 0.2s',flexShrink:0,marginLeft:8}}>▾</div>}
+      </div>
+      {open&&!empty&&(
+        <div style={{padding:'10px 14px 4px'}}>
+          {savedRecipes.map(r=>(
+            <div key={r.id}>
+              <RecipeCard recipe={r} T={T} grinder={grinder}/>
+              <div style={{marginTop:-8,marginBottom:14,display:'flex',justifyContent:'flex-end'}}>
+                <button onClick={()=>onDelete(r.id)} style={{
+                  padding:'5px 12px',
+                  border:`1px solid ${T.border}`,background:T.bg3,color:T.textMute,
+                  borderRadius:14,cursor:'pointer',
+                  fontSize:10,letterSpacing:'0.1em',
+                  touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+                }}>🗑 Supprimer</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TabRecettes({T,coffee,setCoffee}){
+  const [active,setActive]=useState('v60')
+  const [grinderId,setGrinderId]=useState('none')
+  const [showGuide,setShowGuide]=useState(false)
+  const {favs:favGrinders,toggle:toggleFavGrinder,isFav:isFavGrinder}=useFavorites(FAV_GRINDERS_KEY)
+  const [savedRecipes,setSavedRecipes]=useState(()=>{try{const s=localStorage.getItem(SAVED_RECIPES_KEY);return s?JSON.parse(s):[]}catch{return[]}})
+  useEffect(()=>{try{localStorage.setItem(SAVED_RECIPES_KEY,JSON.stringify(savedRecipes))}catch{}},[savedRecipes])
+
+  const recipes=RECIPES.filter(r=>r.method===active)
+  const activeM=METHODS.find(m=>m.id===active)
+  const grinder=grinderId!=='none'?GRINDERS[grinderId]:null
+  const favGrinderEntries=favGrinders.map(id=>[id,GRINDERS[id]]).filter(([,v])=>v)
+
+  const handleSaveRecipe=(recipe)=>{
+    const saved={
+      ...recipe,
+      id:`saved-${Date.now()}`,
+      badge:{type:'standard',label:'⭐ Sauvegardée'},
+      savedAt:Date.now(),
+    }
+    setSavedRecipes(prev=>[saved,...prev])
+    return true
+  }
+  const handleDeleteSaved=(id)=>{
+    if(!window.confirm('Supprimer cette recette sauvegardée ?')) return
+    setSavedRecipes(prev=>prev.filter(r=>r.id!==id))
+  }
+
+  const brands={}
+  Object.entries(GRINDERS).forEach(([id,g])=>{
+    if(id==='none'||!g.brand)return
+    if(!brands[g.brand])brands[g.brand]=[]
+    brands[g.brand].push([id,g])
+  })
+
+  return(
+    <div>
+      {showGuide&&<GuideModal mode="recettes" onClose={()=>setShowGuide(false)} T={T}/>}
+      {/* Bouton guide */}
+      <div style={{marginBottom:12}}>
+        <button onClick={()=>setShowGuide(true)} style={{width:'100%',padding:'9px 0',background:T.bg3,border:`1px solid ${T.gold}66`,color:T.gold,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',touchAction:'manipulation'}}>📖 GUIDE — RECETTES</button>
+      </div>
+      {/* Sélecteur de moulin */}
+      <div style={{marginBottom:16,padding:'12px 14px',background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,boxShadow:`0 2px 8px ${T.shadow}`}}>
+        <div style={{fontSize:10,letterSpacing:'0.2em',textTransform:'uppercase',color:T.textMute,marginBottom:8}}>⚙ Convertir les réglages pour mon moulin</div>
+
+        {/* Chips favoris — accès rapide */}
+        {favGrinderEntries.length>0&&(
+          <div style={{marginBottom:8,display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+            <span style={{fontSize:9,letterSpacing:'0.2em',color:T.gold,textTransform:'uppercase',fontWeight:700,marginRight:2}}>★ Favoris</span>
+            {favGrinderEntries.map(([id,v])=>(
+              <button key={id} onClick={()=>setGrinderId(id)} style={{
+                padding:'5px 10px',fontSize:10,fontFamily:'monospace',
+                border:`1px solid ${grinderId===id?T.gold:`${T.gold}55`}`,
+                background:grinderId===id?`${T.gold}22`:`${T.gold}0a`,
+                color:grinderId===id?T.gold:T.textDim,
+                borderRadius:14,cursor:'pointer',touchAction:'manipulation',
+                fontWeight:grinderId===id?700:400,WebkitTapHighlightColor:'transparent',
+              }}>★ {v.label}</button>
+            ))}
+          </div>
+        )}
+
+        <div style={{display:'flex',gap:6,alignItems:'stretch'}}>
+          <div style={{position:'relative',flex:1,minWidth:0}}>
+            <select value={grinderId} onChange={e=>setGrinderId(e.target.value)} style={{width:'100%',padding:'9px 12px',background:T.bg3,color:grinderId!=='none'?T.gold:T.textMute,border:`1px solid ${grinderId!=='none'?T.gold:T.border}`,borderRadius:6,fontSize:13,fontFamily:'monospace',cursor:'pointer',outline:'none',WebkitAppearance:'none',appearance:'none',fontWeight:grinderId!=='none'?700:400}}>
+              <option value="none">— Aucun (afficher réglage original) —</option>
+              {Object.entries(brands).map(([brand,grinders])=>(
+                <optgroup key={brand} label={brand}>
+                  {grinders.map(([id,g])=>(
+                    <option key={id} value={id}>{isFavGrinder(id)?'★ ':''}{g.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',color:T.textMute,pointerEvents:'none'}}>▾</span>
+          </div>
+          {grinderId!=='none'&&(
+            <button onClick={()=>toggleFavGrinder(grinderId)} title={isFavGrinder(grinderId)?'Retirer des favoris':'Ajouter aux favoris'} style={{
+              padding:'0 14px',
+              background:isFavGrinder(grinderId)?`${T.gold}22`:T.bg3,
+              border:`1px solid ${isFavGrinder(grinderId)?T.gold:T.border}`,
+              color:isFavGrinder(grinderId)?T.gold:T.textMute,
+              borderRadius:6,cursor:'pointer',fontSize:16,
+              touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+              flexShrink:0,
+            }}>{isFavGrinder(grinderId)?'★':'☆'}</button>
+          )}
+        </div>
+        {grinder&&<div style={{marginTop:6,fontSize:10,color:T.textMute,fontFamily:'monospace'}}>{grinder.description}</div>}
+      </div>
+
+      <div style={{overflowX:'auto',scrollbarWidth:'none',WebkitOverflowScrolling:'touch',marginBottom:16,paddingBottom:4}}>
+        <div style={{display:'flex',gap:6,minWidth:'max-content'}}>
+          {METHODS.map(m=>(
+            <button key={m.id} onClick={()=>setActive(m.id)} style={{flexShrink:0,padding:'7px 13px',fontFamily:'sans-serif',fontSize:11,letterSpacing:'0.12em',textTransform:'uppercase',background:active===m.id?`${T.gold}20`:T.bg2,color:active===m.id?T.gold:T.textMute,border:`1px solid ${active===m.id?T.gold:T.border}`,borderRadius:20,cursor:'pointer',touchAction:'manipulation',WebkitTapHighlightColor:'transparent',transition:'all 0.18s',fontWeight:active===m.id?700:400,whiteSpace:'nowrap'}}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {activeM&&(
+        <div style={{marginBottom:12,paddingBottom:10,borderBottom:`1px solid ${T.border}`}}>
+          <div style={{fontSize:10,letterSpacing:'0.2em',textTransform:'uppercase',color:T.textMute}}>{activeM.desc}</div>
+          <div style={{fontSize:10,color:T.textMute,marginTop:2}}>{recipes.length} recette{recipes.length>1?'s':''}</div>
+        </div>
+      )}
+
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16,alignItems:'flex-start'}}>
+        <div style={{flex:'1 1 280px',minWidth:0}}>
+          <RecipeGenerator methodId={active} coffee={coffee} setCoffee={setCoffee} grinderId={grinderId} T={T} onSave={handleSaveRecipe}/>
+        </div>
+        <div style={{flex:'1 1 280px',minWidth:0}}>
+          <SavedRecipesPanel savedRecipes={savedRecipes} onDelete={handleDeleteSaved} T={T} grinder={grinder}/>
+        </div>
+      </div>
+
+      {recipes.map(r=><RecipeCard key={r.id} recipe={r} T={T} grinder={grinder}/>)}
+    </div>
+  )
+}
+
+// ─── COMPARATEUR DE MOULIN ───────────────────────────────────────────────────
+// Helpers de précision adaptative
+const grinderStep = (g) => g?.step != null ? g.step : (g?.unit === 'rot' ? 0.1 : 1)
+const grinderDecimals = (g) => {
+  if (g?.decimals != null) return g.decimals
+  if (g?.unit === 'rot') return 1
+  if (g?.step && g.step < 1) return g.step >= 0.5 ? 1 : 2
+  return 0
+}
+const fmtVal = (v, g) => {
+  if (v == null) return '—'
+  const d = grinderDecimals(g)
+  return Number(v).toFixed(d)
+}
+const roundToStep = (v, step) => Math.round(v / step) * step
+
+function TabComparateur({ T }) {
+  const [fromId, setFromId] = useState('none')
+  const [toId,   setToId]   = useState('none')
+  const [fromVal, setFromVal] = useState(1)
+
+  const fromG = fromId !== 'none' ? GRINDERS[fromId] : null
+  const toG   = toId   !== 'none' ? GRINDERS[toId]   : null
+
+  // µm source — pas d'arrondi intermédiaire, garde la précision pour le calcul cible
+  const sourceµmRaw = fromG
+    ? fromG.clicks
+      ? fromG.minµm + (fromVal / fromG.clicks) * (fromG.maxµm - fromG.minµm)
+      : fromVal
+    : null
+  const sourceµm = sourceµmRaw != null ? Math.round(sourceµmRaw) : null
+
+  // Cible — précision décimale adaptative
+  const targetValRaw = toG && sourceµmRaw !== null
+    ? toG.clicks
+      ? (sourceµmRaw - toG.minµm) / (toG.maxµm - toG.minµm) * toG.clicks
+      : sourceµmRaw
+    : null
+  const targetStep = toG ? grinderStep(toG) : 1
+  const targetVal = targetValRaw != null
+    ? toG?.clicks
+      ? Math.max(targetStep, roundToStep(targetValRaw, targetStep))
+      : Math.round(targetValRaw / 5) * 5 // arrondi 5µm pour stepless
+    : null
+
+  const inRange = toG && sourceµm !== null && sourceµm >= toG.minµm && sourceµm <= toG.maxµm
+  const µmPerFrom = fromG?.clicks ? Math.round((fromG.maxµm - fromG.minµm) / fromG.clicks * 10) / 10 : null
+  const µmPerTo   = toG?.clicks   ? Math.round((toG.maxµm   - toG.minµm)   / toG.clicks   * 10) / 10 : null
+
+  // Précision affichée pour le moulin source / cible
+  const fromStep = fromG ? grinderStep(fromG) : 1
+  const fromDecimals = fromG ? grinderDecimals(fromG) : 0
+  const fromMax = fromG?.clicks || fromG?.maxµm || 100
+  const fromMin = fromG?.unit === 'µm' ? fromG.minµm : (fromStep < 1 ? fromStep : 1)
+
+  const brands = {}
+  Object.entries(GRINDERS).forEach(([id, g]) => {
+    if (id === 'none') return
+    if (!brands[g.brand]) brands[g.brand] = []
+    brands[g.brand].push([id, g])
+  })
+
+  const sel = {
+    width:'100%', padding:'10px 12px', background:T.bg3, color:T.text,
+    border:`1px solid ${T.border}`, borderRadius:6, fontSize:13,
+    fontFamily:'monospace', cursor:'pointer', outline:'none',
+    WebkitAppearance:'none', appearance:'none'
+  }
+  const lbl = {
+    fontSize:10, letterSpacing:'0.2em', textTransform:'uppercase',
+    color:T.textMute, marginBottom:6, display:'block'
+  }
+  const card = {
+    background:T.bg2, border:`1px solid ${T.border}`, borderRadius:10,
+    padding:16, boxShadow:`0 2px 8px ${T.shadow}`
+  }
+  const btn = {
+    width:38, height:38, background:T.bg3, border:`1px solid ${T.border}`,
+    borderRadius:6, cursor:'pointer', fontSize:18, color:T.text, touchAction:'manipulation',
+    WebkitTapHighlightColor:'transparent'
+  }
+
+  const GrinderSelect = ({ value, onChange }) => (
+    <div style={{position:'relative'}}>
+      <select value={value} onChange={e => onChange(e.target.value)} style={sel}>
+        <option value="none">— Sélectionner un moulin —</option>
+        {Object.entries(brands).map(([brand, grinders]) => (
+          <optgroup key={brand} label={brand}>
+            {grinders.map(([id, g]) => (
+              <option key={id} value={id}>{g.label}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',color:T.textMute,pointerEvents:'none'}}>▾</span>
+    </div>
+  )
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{padding:'12px 16px',background:`${T.gold}12`,border:`1px solid ${T.gold}44`,borderRadius:8}}>
+        <div style={{fontSize:12,fontWeight:700,color:T.gold,letterSpacing:'0.15em',textTransform:'uppercase',marginBottom:4}}>⇄ Comparateur de Moulin</div>
+        <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>Convertit un réglage d'un moulin vers un autre selon la résolution µm/{`clic`} de chaque appareil.</div>
+      </div>
+
+      {/* SOURCE */}
+      <div style={card}>
+        <span style={lbl}>Moulin source</span>
+        <GrinderSelect value={fromId} onChange={v => { setFromId(v); setFromVal(1) }} />
+        {fromG && (
+          <div style={{marginTop:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <span style={lbl}>{fromG.clicks ? `Réglage (${fromG.unit})` : 'Valeur (µm)'}</span>
+              {µmPerFrom && <span style={{fontSize:10,color:T.textMute,fontFamily:'monospace'}}>{µmPerFrom} µm/{fromG.unit}</span>}
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <button onClick={() => setFromVal(v => Math.max(fromMin, roundToStep(v - fromStep, fromStep)))} style={btn}>−</button>
+              <input
+                type="number" value={Number(fromVal).toFixed(fromDecimals)} min={fromMin} max={fromMax} step={fromStep}
+                onChange={e => {
+                  const parsed = parseFloat(e.target.value)
+                  if(isNaN(parsed)) return
+                  const clamped = Math.max(fromMin, Math.min(fromMax, parsed))
+                  setFromVal(roundToStep(clamped, fromStep))
+                }}
+                style={{flex:1,textAlign:'center',padding:'8px 0',background:T.bg3,border:`1px solid ${T.border2}`,borderRadius:6,fontSize:20,fontWeight:700,fontFamily:'monospace',color:T.gold,outline:'none'}}
+              />
+              <button onClick={() => setFromVal(v => Math.min(fromMax, roundToStep(v + fromStep, fromStep)))} style={btn}>+</button>
+            </div>
+            {fromG.clicks && (
+              <div style={{marginTop:10,display:'flex',justifyContent:'center'}}>
+                <div style={{fontFamily:'monospace',fontSize:13,color:T.textDim,background:T.bg3,padding:'6px 16px',borderRadius:20,border:`1px solid ${T.border}`}}>
+                  ≈ <span style={{color:T.text,fontWeight:700}}>{sourceµm}</span> µm
+                  <span style={{color:T.textMute,marginLeft:8,fontSize:11}}>(pas {fromStep})</span>
+                </div>
+              </div>
+            )}
+            <div style={{marginTop:6,fontSize:10,color:T.textMute,textAlign:'center'}}>{fromG.description}</div>
+          </div>
+        )}
+      </div>
+
+      {fromG && sourceµm !== null && (
+        <div style={{textAlign:'center',fontSize:22,color:T.gold}}>↕</div>
+      )}
+
+      {/* CIBLE */}
+      <div style={card}>
+        <span style={lbl}>Moulin cible</span>
+        <GrinderSelect value={toId} onChange={setToId} />
+        {toG && sourceµm !== null && (
+          <div style={{marginTop:14}}>
+            {µmPerTo && (
+              <div style={{fontSize:10,color:T.textMute,fontFamily:'monospace',marginBottom:10,textAlign:'right'}}>{µmPerTo} µm/{toG.unit}</div>
+            )}
+            {inRange ? (
+              <div style={{background:`${T.green}15`,border:`1px solid ${T.green}44`,borderRadius:8,padding:'14px 16px',textAlign:'center'}}>
+                <div style={{fontSize:11,letterSpacing:'0.2em',textTransform:'uppercase',color:T.green,marginBottom:6}}>Réglage équivalent</div>
+                <div style={{fontFamily:'monospace',fontSize:42,fontWeight:900,color:T.green,lineHeight:1}}>{fmtVal(targetVal, toG)}</div>
+                <div style={{fontSize:12,color:T.textDim,marginTop:4}}>{toG.unit}</div>
+                {toG.clicks && (
+                  <div style={{fontSize:11,color:T.textMute,marginTop:8,fontFamily:'monospace'}}>≈ {sourceµm} µm · sur {toG.clicks} {toG.unit}s max · pas {targetStep}</div>
+                )}
+                {toG.unit === 'rot' && targetVal != null && (
+                  <div style={{marginTop:6,fontSize:10,color:T.textMute,fontFamily:'monospace'}}>
+                    Notation 1Zpresso : {(() => {
+                      const totalClicks = Math.round(targetVal * 90)
+                      const rot = Math.floor(totalClicks / 90)
+                      const numTickRem = totalClicks - rot * 90
+                      const num = Math.floor(numTickRem / 10)
+                      const tick = numTickRem - num * 10
+                      return `${rot}.${num}.${tick}`
+                    })()} <span style={{color:T.textMute}}>(rot.numéro.tick)</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{background:`${T.red}15`,border:`1px solid ${T.red}44`,borderRadius:8,padding:'14px 16px',textAlign:'center'}}>
+                <div style={{fontSize:12,color:T.red,fontWeight:600}}>⚠ Hors plage</div>
+                <div style={{fontSize:11,color:T.textMute,marginTop:4}}>Ce moulin couvre {toG.minµm}–{toG.maxµm} µm · valeur calculée : {sourceµm} µm</div>
+              </div>
+            )}
+            <div style={{marginTop:6,fontSize:10,color:T.textMute,textAlign:'center'}}>{toG.description}</div>
+          </div>
+        )}
+      </div>
+
+      {/* RÉSUMÉ RÉSOLUTION */}
+      {fromG && toG && µmPerFrom && µmPerTo && (
+        <div style={{...card,background:T.bg3}}>
+          <div style={{fontSize:10,letterSpacing:'0.2em',textTransform:'uppercase',color:T.textMute,marginBottom:10}}>Résolution comparée</div>
+          <div style={{display:'flex',gap:8}}>
+            <div style={{flex:1,textAlign:'center',padding:'10px 8px',background:T.bg2,borderRadius:6,border:`1px solid ${T.border}`}}>
+              <div style={{fontSize:10,color:T.textMute,marginBottom:4}}>{fromG.label}</div>
+              <div style={{fontFamily:'monospace',fontSize:15,fontWeight:700,color:T.gold}}>{µmPerFrom} µm</div>
+              <div style={{fontSize:9,color:T.textMute}}>par {fromG.unit}</div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',color:T.textMute,fontSize:16}}>⇄</div>
+            <div style={{flex:1,textAlign:'center',padding:'10px 8px',background:T.bg2,borderRadius:6,border:`1px solid ${T.border}`}}>
+              <div style={{fontSize:10,color:T.textMute,marginBottom:4}}>{toG.label}</div>
+              <div style={{fontFamily:'monospace',fontSize:15,fontWeight:700,color:MC}}>{µmPerTo} µm</div>
+              <div style={{fontSize:9,color:T.textMute}}>par {toG.unit}</div>
+            </div>
+          </div>
+          {µmPerFrom !== µmPerTo && (
+            <div style={{marginTop:8,fontSize:11,color:T.textMute,textAlign:'center'}}>
+              1 {fromG.unit} {fromG.label} ≈ <span style={{color:T.text,fontWeight:600}}>{Math.round(µmPerFrom / µmPerTo * 10) / 10}</span> {toG.unit} {toG.label}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── BOUTIQUE ────────────────────────────────────────────────────────────────
+function TabBoutique({ T }) {
+  const Btn = ({ href, icon, title, subtitle, color }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={{
+      display:'block',textDecoration:'none',
+      background:T.bg2,border:`1px solid ${color}55`,borderRadius:10,
+      padding:18,marginBottom:14,cursor:'pointer',
+      boxShadow:`0 2px 12px ${T.shadow}`,
+      WebkitTapHighlightColor:'transparent',touchAction:'manipulation',
+    }}>
+      <div style={{display:'flex',alignItems:'center',gap:14}}>
+        <div style={{fontSize:32,lineHeight:1}}>{icon}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',color,fontWeight:700,marginBottom:4}}>{title}</div>
+          <div style={{fontSize:11,color:T.textDim,lineHeight:1.4}}>{subtitle}</div>
+        </div>
+        <div style={{fontSize:20,color,flexShrink:0}}>→</div>
+      </div>
+    </a>
+  )
+  return (
+    <div>
+      <Btn
+        href="https://torrea.fr/"
+        icon="🛒"
+        title="Boutique TORREA"
+        subtitle="Découvrez notre sélection de cafés de spécialité, torréfiés artisanalement"
+        color={T.gold}
+      />
+      <Btn
+        href="https://trouvons-ton-cafe-ideal.vercel.app/"
+        icon="✨"
+        title="Torrea Tailor — Blend personnalisé"
+        subtitle="Créez votre blend sur-mesure avec notre app de configuration"
+        color={T.gold}
+      />
+      <Btn
+        href="https://torrea.fr/product-category/cafe-artisanal/cafes-en-grains/cafe-pur-origine/"
+        icon="🌍"
+        title="Café pur origine"
+        subtitle="Notre sélection de cafés single-origin en grains"
+        color={T.blue}
+      />
+    </div>
+  )
+}
+
+// ─── WELCOME MODAL ────────────────────────────────────────────────────────────
+function WelcomeModal({ onClose, T }) {
+  const COACH_C='#9b6bff'
+  const news = [
+    { icon:'🧠', title:'Coach IA', accent:COACH_C, desc:"Active le Coach dans le générateur : après chaque essai, dis ce que tu as goûté (acide, amer, fade…) → l'app ajuste mouture / temp / ratio selon les protocoles SCA." },
+    { icon:'★',  title:'Favoris moulins & machines', accent:T.gold, desc:'Marque tes moulins et machines préférés d\'une étoile pour les retrouver instantanément en haut de la liste.' },
+    { icon:'☕', title:'Fellow Aiden', accent:T.gold, desc:'Nouvelle méthode de brassage avec sélection automatique de profil expert (Washed Clarity, Natural Sweetness, Hybrid…) selon ton café.' },
+    { icon:'👾', title:'Coffee Invader élargi', accent:T.gold, desc:'L\'easter egg accessible avec n\'importe quelle machine. Mode swipe simplifié et plus réactif.' },
+    { icon:'💾', title:'Recettes sauvegardées persistantes', accent:T.gold, desc:'Tes recettes sauvegardées sont visibles quelle que soit la méthode active.' },
+  ]
+  const features = [
+    { icon: '⚙', title: 'Calibration Moulin', desc: "Analyse ton ratio et ton temps d'extraction, recommande des ajustements de mouture progressifs." },
+    { icon: '☕', title: 'Calibration Machine', desc: 'Optimise ta température et ta pré-infusion selon tes résultats en tasse.' },
+    { icon: '▽', title: 'Recettes', desc: 'Copie ou génère des recettes personnalisées selon ton café, ta torréfaction et le profil en tasse recherché.' },
+    { icon: '☰', title: 'Historique & Analyse', desc: 'Retrouve tous tes shots passés et visualise tes progressions.' },
+    { icon: '✨', title: 'Torrea Tailor – Blend Personnalisé', desc: 'Crée ton blend café sur-mesure avec notre configurateur dédié.' },
+  ]
+  return (
+    <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',background:'rgba(0,0,0,0.72)',backdropFilter:'blur(4px)'}}>
+      <div style={{background:T.bg2,border:`1px solid ${T.gold}66`,borderRadius:14,maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:`0 8px 40px rgba(0,0,0,0.6)`}}>
+        {/* Header */}
+        <div style={{padding:'24px 20px 16px',borderBottom:`1px solid ${T.border}`,textAlign:'center',position:'relative'}}>
+          <button onClick={onClose} style={{position:'absolute',top:8,right:12,background:'transparent',border:'none',color:T.textDim,cursor:'pointer',fontSize:20,lineHeight:1,padding:'4px 8px',touchAction:'manipulation'}}>×</button>
+          <div style={{fontSize:26,fontWeight:900,color:T.gold,fontFamily:'Georgia,serif',letterSpacing:'-0.02em',lineHeight:1}}>TORREA</div>
+          <div style={{fontSize:9,letterSpacing:'0.55em',color:T.textMute,marginTop:3}}>DIAL-IN SYSTEM</div>
+          <div style={{marginTop:12,fontSize:13,color:T.textDim,lineHeight:1.5}}>
+            Ton assistant de calibration café — tire le meilleur de chaque grain, à chaque extraction.
+          </div>
+        </div>
+
+        {/* Nouveautés */}
+        <div style={{padding:'16px 20px 8px',background:`linear-gradient(180deg, ${COACH_C}0a 0%, transparent 100%)`}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+            <div style={{flex:1,height:1,background:`linear-gradient(90deg, transparent, ${COACH_C}66, transparent)`}}/>
+            <div style={{fontSize:10,letterSpacing:'0.3em',color:COACH_C,fontWeight:700,textTransform:'uppercase'}}>🆕 Nouveautés V10.2</div>
+            <div style={{flex:1,height:1,background:`linear-gradient(90deg, transparent, ${COACH_C}66, transparent)`}}/>
+          </div>
+          {news.map(f=>(
+            <div key={f.title} style={{display:'flex',gap:12,marginBottom:14,alignItems:'flex-start',padding:'10px 12px',background:`${f.accent}0a`,border:`1px solid ${f.accent}33`,borderRadius:8}}>
+              <div style={{fontSize:18,flexShrink:0,marginTop:1,width:24,textAlign:'center'}}>{f.icon}</div>
+              <div>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.1em',color:f.accent,textTransform:'uppercase',marginBottom:2}}>{f.title}</div>
+                <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>{f.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Fonctionnalités principales */}
+        <div style={{padding:'8px 20px 16px'}}>
+          <div style={{fontSize:10,letterSpacing:'0.25em',color:T.textMute,fontWeight:700,textTransform:'uppercase',marginBottom:10,marginTop:8}}>Fonctionnalités</div>
+          {features.map(f=>(
+            <div key={f.title} style={{display:'flex',gap:12,marginBottom:14,alignItems:'flex-start'}}>
+              <div style={{fontSize:18,flexShrink:0,marginTop:1,width:24,textAlign:'center'}}>{f.icon}</div>
+              <div>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.1em',color:T.gold,textTransform:'uppercase',marginBottom:2}}>{f.title}</div>
+                <div style={{fontSize:11,color:T.textDim,lineHeight:1.5}}>{f.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* CTA */}
+        <div style={{padding:'0 20px 20px'}}>
+          <button onClick={onClose} style={{
+            width:'100%',padding:'14px 0',
+            background:`${T.gold}22`,border:`1px solid ${T.gold}`,
+            color:T.gold,borderRadius:8,cursor:'pointer',
+            fontSize:13,letterSpacing:'0.2em',fontWeight:700,
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>
+            COMMENCER →
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── APP ROOT ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [darkMode,setDarkMode]=useState(true)
+  const T=darkMode?DARK:LIGHT
+  const [showWelcome,setShowWelcome]=useState(true)
+  const closeWelcome=()=>{setShowWelcome(false)}
+  const [mainTab,setMainTab]=useState('calibration')
+  const [subTab,setSubTab]=useState('moulin')
+  const [coffee,setCoffee]=useState({name:'',country:'',variety:'',profile:'',process:'',roastDate:''})
+  const [_sp]=useState(loadSavedParams)
+  const [dose,setDose]=useState(_sp.dose||18),[yld,setYld]=useState(_sp.yld||36)
+  const [moulinMethod,setMoulinMethod]=useState(_sp.moulinMethod||'espresso')
+  const [moulinGrind,setMoulinGrind]=useState(_sp.moulinGrind||200)
+  const [moulinGrinderId,setMoulinGrinderId]=useState(_sp.moulinGrinderId||'none')
+  const [machineTemp,setMachineTemp]=useState(_sp.machineTemp||93)
+  const [machinePreInfPct,setMachinePreInfPct]=useState(_sp.machinePreInfPct||70)
+  const [machinePreInfSec,setMachinePreInfSec]=useState(_sp.machinePreInfSec||5)
+  const [machineId,setMachineId]=useState(()=>migrateMachineId(_sp.machineId||_sp.machineMachineType))
+  const [portafilterType,setPortafilterType]=useState(_sp.portafilterType||null)
+  const [notes,setNotes]=useState(_sp.notes||{body:0,sweetness:0,finish:0,aromas:[]})
+  const [history,setHistory]=useState(()=>{
+    try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):[]}catch{return[]}
+  })
+  useEffect(()=>{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(history))}catch{}},[history])
+  useEffect(()=>{try{localStorage.setItem(PARAMS_KEY,JSON.stringify({moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,portafilterType,notes,dose,yld}))}catch{}},[moulinMethod,moulinGrind,moulinGrinderId,machineTemp,machinePreInfPct,machinePreInfSec,machineId,portafilterType,notes,dose,yld])
+
+  // Import recette via URL ?r=<base64>
+  useEffect(()=>{
+    if(typeof window==='undefined')return
+    const p=new URLSearchParams(window.location.search)
+    const r=p.get('r'); if(!r)return
+    const dec=decodeRecipe(r); if(!dec){return}
+    if(dec.coffee)setCoffee({name:dec.coffee.name||'',country:dec.coffee.country||'',variety:dec.coffee.variety||'',profile:dec.coffee.profile||'',process:dec.coffee.process||'',roastDate:dec.coffee.roastDate||''})
+    if(dec.dose)setDose(dec.dose); if(dec.yld)setYld(dec.yld)
+    if(dec.notes)setNotes({body:dec.notes.body||0,sweetness:dec.notes.sweetness||0,finish:dec.notes.finish||0,aromas:dec.notes.aromas||[]})
+    if(dec.mode==='moulin'){
+      setSubTab('moulin')
+      if(dec.method)setMoulinMethod(dec.method)
+      if(dec.grind)setMoulinGrind(dec.grind)
+      if(dec.grinderId)setMoulinGrinderId(dec.grinderId)
+    }else if(dec.mode==='machine'){
+      setSubTab('machine')
+      if(dec.temp)setMachineTemp(dec.temp)
+      if(dec.preInfPct)setMachinePreInfPct(dec.preInfPct)
+      if(dec.preInfSec)setMachinePreInfSec(dec.preInfSec)
+      if(dec.machineId)setMachineId(migrateMachineId(dec.machineId))
+    }
+    setMainTab('calibration')
+    // Nettoie l'URL pour ne pas réimporter au refresh
+    try{window.history.replaceState({},'',window.location.pathname)}catch{}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[])
+  const saveEntry=entry=>setHistory(h=>[{...entry,id:Date.now(),ts:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})},...h].slice(0,50))
+  const deleteEntries=ids=>setHistory(h=>h.filter(e=>!ids.includes(e.id)))
+  const applyRecipe=h=>{
+    if(h.mode==='moulin'){
+      setSubTab('moulin')
+      if(h.method)setMoulinMethod(h.method)
+      if(h.grind)setMoulinGrind(h.grind)
+      if(h.grinderId)setMoulinGrinderId(h.grinderId)
+    }else{
+      setSubTab('machine')
+      if(h.temp)setMachineTemp(h.temp)
+      if(h.preInfPct)setMachinePreInfPct(h.preInfPct)
+      if(h.preInfSec)setMachinePreInfSec(h.preInfSec)
+      if(h.machineId)setMachineId(migrateMachineId(h.machineId))
+    }
+    if(h.dose)setDose(h.dose)
+    if(h.yld)setYld(h.yld)
+    if(h.coffee)setCoffee({name:h.coffee.name||'',country:h.coffee.country||'',variety:h.coffee.variety||'',profile:h.coffee.profile||'',process:h.coffee.process||'',roastDate:h.coffee.roastDate||''})
+    if(h.notes)setNotes({body:h.notes.body||0,sweetness:h.notes.sweetness||0,finish:h.notes.finish||0,aromas:h.notes.aromas||[]})
+    setMainTab('calibration')
+  }
+  const rateEntry=(id,rating)=>setHistory(h=>h.map(e=>e.id===id?{...e,rating}:e))
+
+  // ── Timer partagé Moulin ↔ Machine ──
+  const [time,setTime]=useState(27)
+  const [timerRunning,setTimerRunning]=useState(false)
+  const [timerElapsed,setTimerElapsed]=useState(0)
+  const timerRef=useRef(null),t0Ref=useRef(0)
+  const timerStart=()=>{
+    if(timerRunning)return
+    setTimerRunning(true)
+    t0Ref.current=Date.now()-timerElapsed*1000
+    timerRef.current=setInterval(()=>{const s=Math.floor((Date.now()-t0Ref.current)/1000);setTimerElapsed(s);setTime(s)},100)
+  }
+  const timerPause=()=>{setTimerRunning(false);clearInterval(timerRef.current)}
+  const timerReset=()=>{setTimerRunning(false);clearInterval(timerRef.current);setTimerElapsed(0);setTime(0)}
+  useEffect(()=>()=>clearInterval(timerRef.current),[])
+
+  const EMPTY_COFFEE={name:'',country:'',variety:'',profile:'',process:'',roastDate:''}
+  const EMPTY_NOTES={body:0,sweetness:0,finish:0,aromas:[]}
+  const resetMoulin=()=>{
+    setDose(18);setYld(36);timerReset()
+    setMoulinGrind(BREW_METHODS[moulinMethod]?.grindBaseµm||200)
+    setNotes(EMPTY_NOTES);setPortafilterType(null);setCoffee(EMPTY_COFFEE)
+  }
+  const resetMachine=()=>{
+    setDose(18);setYld(36);timerReset()
+    setMachineTemp(93);setMachinePreInfPct(70);setMachinePreInfSec(5)
+    setNotes(EMPTY_NOTES);setPortafilterType(null);setCoffee(EMPTY_COFFEE)
+  }
+
+  return (
+    <div style={{minHeight:'100vh',backgroundColor:T.bg,color:T.text,fontFamily:'sans-serif',transition:'background-color 0.3s,color 0.3s',
+      backgroundImage:darkMode?`linear-gradient(${T.bg3} 1px,transparent 1px),linear-gradient(90deg,${T.bg3} 1px,transparent 1px)`:`linear-gradient(${T.bg4} 1px,transparent 1px),linear-gradient(90deg,${T.bg4} 1px,transparent 1px)`,
+      backgroundSize:'44px 44px',position:'relative'}}>
+
+      {showWelcome&&<WelcomeModal onClose={closeWelcome} T={T}/>}
+      <CaffeineBackground darkMode={darkMode}/>
+
+      <div style={{maxWidth:520,margin:'0 auto',padding:'0 16px 80px',position:'relative',zIndex:1}}>
+
+        {/* HEADER */}
+        <div style={{padding:'20px 0 14px',borderBottom:`1px solid ${T.border}`,marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <div style={{fontSize:28,fontWeight:900,color:darkMode?'#ffffff':T.text,letterSpacing:'-0.02em',fontFamily:'Georgia,serif',lineHeight:1}}>TORREA</div>
+            <div style={{fontSize:9,letterSpacing:'0.55em',color:T.textMute,marginTop:2}}>DIAL-IN SYSTEM</div>
+          </div>
+          <button onClick={()=>setDarkMode(d=>!d)} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:darkMode?T.bg3:`${T.gold}18`,border:`1px solid ${darkMode?T.border:T.gold+'66'}`,borderRadius:20,cursor:'pointer',color:darkMode?T.textDim:T.gold,fontSize:12,letterSpacing:'0.1em',touchAction:'manipulation',WebkitTapHighlightColor:'transparent',transition:'all 0.2s'}}>
+            <span style={{fontSize:16}}>{darkMode?'🌙':'☀️'}</span>
+            <span style={{fontWeight:600}}>{darkMode?'Light Mode':'Dark Mode'}</span>
+          </button>
+        </div>
+
+        {/* NAV PRINCIPALE */}
+        <div style={{display:'flex',flexWrap:'wrap',marginBottom:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden',boxShadow:`0 2px 8px ${T.shadow}`}}>
+          {[['calibration','⬤ Calibration'],['history',`☰ Historique (${history.length})`],['analyse','📊 Analyse'],['recettes','☕ Recettes'],['comparateur','⇄ Comparer'],['boutique','🛒 Acheter']].map(([t,label])=>(
+            <button key={t} onClick={()=>setMainTab(t)} style={{flex:'1 1 33.33%',minWidth:0,padding:'12px 4px',fontFamily:'sans-serif',fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',background:mainTab===t?T.bg3:'transparent',color:mainTab===t?T.text:T.textMute,border:'none',cursor:'pointer',touchAction:'manipulation',transition:'all 0.2s',fontWeight:mainTab===t?700:400,borderBottom:mainTab===t?`2px solid ${T.gold}`:'2px solid transparent'}}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* SOUS-ONGLETS */}
+        <div style={{display:mainTab==='calibration'?'flex':'none',gap:8,marginBottom:18}}>
+          {[['moulin','⚙ Moulin',T.gold],['machine','☕ Machine',MC]].map(([t,label,color])=>(
+            <button key={t} onClick={()=>setSubTab(t)} style={{flex:1,padding:'10px 0',fontFamily:'sans-serif',fontSize:12,letterSpacing:'0.15em',textTransform:'uppercase',background:subTab===t?`${color}20`:T.bg2,color:subTab===t?color:T.textMute,border:`1px solid ${subTab===t?color:T.border}`,borderRadius:6,cursor:'pointer',touchAction:'manipulation',transition:'all 0.2s',fontWeight:subTab===t?700:400,boxShadow:subTab===t?`0 0 12px ${color}44`:'none'}}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{display:mainTab==='calibration'?'block':'none'}}>
+          <div style={{display:subTab==='moulin'?'block':'none'}}>
+            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} onReset={resetMoulin} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
+          </div>
+          <div style={{display:subTab==='machine'?'block':'none'}}>
+            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} onReset={resetMachine} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
+          </div>
+        </div>
+        {mainTab==='history'&&<TabHistory history={history} onDelete={deleteEntries} onRate={rateEntry} onApply={applyRecipe} T={T}/>}
+        {mainTab==='analyse'&&<TabAnalytics history={history} T={T}/>}
+        {mainTab==='recettes'&&<TabRecettes T={T} coffee={coffee} setCoffee={setCoffee}/>}
+        {mainTab==='comparateur'&&<TabComparateur T={T}/>}
+        {mainTab==='boutique'&&<TabBoutique T={T}/>}
+
+        <div style={{marginTop:32,padding:'16px 0 8px',borderTop:`1px solid ${T.border}`,textAlign:'center',fontSize:10,letterSpacing:'0.15em',color:T.textMute,textTransform:'uppercase'}}>
+          © {new Date().getFullYear()} Torrea — Tous droits réservés
+        </div>
+      </div>
+    </div>
+  )
+}
