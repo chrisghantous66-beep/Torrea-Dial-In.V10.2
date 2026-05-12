@@ -4879,7 +4879,6 @@ function TabBoutique({ T }) {
 function WelcomeModal({ onClose, T }) {
   const COACH_C='#9b6bff'
   const news = [
-    { icon:'🔐', title:'Connexion Torrea', accent:T.blue, desc:'L\'app nécessite désormais un compte Torrea.fr pour accéder à l\'outil de calibration — tes données sont sécurisées et synchronisées.' },
     { icon:'⚙', title:'Moulin générique', accent:T.gold, desc:'Nouveau moulin "Autre / classique" dans le sélecteur : affiche directement les clics (0–100) sans valeur µm, pour tout moulin non répertorié.' },
     { icon:'🧠', title:'Coach IA', accent:COACH_C, desc:"Active le Coach dans le générateur : après chaque essai, dis ce que tu as goûté (acide, amer, fade…) → l'app ajuste mouture / temp / ratio selon les protocoles SCA." },
     { icon:'★',  title:'Favoris moulins & machines', accent:T.gold, desc:'Marque tes moulins et machines préférés d\'une étoile pour les retrouver instantanément en haut de la liste.' },
@@ -4910,7 +4909,7 @@ function WelcomeModal({ onClose, T }) {
         <div style={{padding:'16px 20px 8px',background:`linear-gradient(180deg, ${COACH_C}0a 0%, transparent 100%)`}}>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
             <div style={{flex:1,height:1,background:`linear-gradient(90deg, transparent, ${COACH_C}66, transparent)`}}/>
-            <div style={{fontSize:10,letterSpacing:'0.3em',color:COACH_C,fontWeight:700,textTransform:'uppercase'}}>🆕 Nouveautés V11</div>
+            <div style={{fontSize:10,letterSpacing:'0.3em',color:COACH_C,fontWeight:700,textTransform:'uppercase'}}>🆕 Nouveautés</div>
             <div style={{flex:1,height:1,background:`linear-gradient(90deg, transparent, ${COACH_C}66, transparent)`}}/>
           </div>
           {news.map(f=>(
