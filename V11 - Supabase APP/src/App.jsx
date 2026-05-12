@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { METHODS, RECIPES, BADGE_COLORS } from './recipes.js'
+import { useAuth } from './AuthContext'
+import AuthScreen from './AuthScreen'
 
 // ─── THÈMES ───────────────────────────────────────────────────────────────────
 const DARK = {
@@ -4928,6 +4930,7 @@ function WelcomeModal({ onClose, T }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const { session, logout } = useAuth()
   const [darkMode,setDarkMode]=useState(true)
   const T=darkMode?DARK:LIGHT
   const [showWelcome,setShowWelcome]=useState(true)
@@ -5029,6 +5032,11 @@ export default function App() {
     setNotes(EMPTY_NOTES);setPortafilterType(null);setCoffee(EMPTY_COFFEE)
   }
 
+  // ── Garde d'authentification (après tous les hooks) ──
+  const urlError = new URLSearchParams(window.location.search).get('auth_error')
+  if (session === undefined) return null
+  if (!session) return <AuthScreen errorFromUrl={urlError} />
+
   return (
     <div style={{minHeight:'100vh',backgroundColor:T.bg,color:T.text,fontFamily:'sans-serif',transition:'background-color 0.3s,color 0.3s',
       backgroundImage:darkMode?`linear-gradient(${T.bg3} 1px,transparent 1px),linear-gradient(90deg,${T.bg3} 1px,transparent 1px)`:`linear-gradient(${T.bg4} 1px,transparent 1px),linear-gradient(90deg,${T.bg4} 1px,transparent 1px)`,
@@ -5045,10 +5053,15 @@ export default function App() {
             <div style={{fontSize:28,fontWeight:900,color:darkMode?'#ffffff':T.text,letterSpacing:'-0.02em',fontFamily:'Georgia,serif',lineHeight:1}}>TORREA</div>
             <div style={{fontSize:9,letterSpacing:'0.55em',color:T.textMute,marginTop:2}}>DIAL-IN SYSTEM</div>
           </div>
-          <button onClick={()=>setDarkMode(d=>!d)} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:darkMode?T.bg3:`${T.gold}18`,border:`1px solid ${darkMode?T.border:T.gold+'66'}`,borderRadius:20,cursor:'pointer',color:darkMode?T.textDim:T.gold,fontSize:12,letterSpacing:'0.1em',touchAction:'manipulation',WebkitTapHighlightColor:'transparent',transition:'all 0.2s'}}>
-            <span style={{fontSize:16}}>{darkMode?'🌙':'☀️'}</span>
-            <span style={{fontWeight:600}}>{darkMode?'Light Mode':'Dark Mode'}</span>
-          </button>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
+            <button onClick={()=>setDarkMode(d=>!d)} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:darkMode?T.bg3:`${T.gold}18`,border:`1px solid ${darkMode?T.border:T.gold+'66'}`,borderRadius:20,cursor:'pointer',color:darkMode?T.textDim:T.gold,fontSize:12,letterSpacing:'0.1em',touchAction:'manipulation',WebkitTapHighlightColor:'transparent',transition:'all 0.2s'}}>
+              <span style={{fontSize:16}}>{darkMode?'🌙':'☀️'}</span>
+              <span style={{fontWeight:600}}>{darkMode?'Light Mode':'Dark Mode'}</span>
+            </button>
+            <button onClick={logout} style={{background:'none',border:'none',cursor:'pointer',color:T.textMute,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',padding:'2px 4px',touchAction:'manipulation'}}>
+              Déconnexion
+            </button>
+          </div>
         </div>
 
         {/* NAV PRINCIPALE */}
