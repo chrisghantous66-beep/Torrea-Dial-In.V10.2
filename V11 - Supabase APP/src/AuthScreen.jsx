@@ -116,12 +116,12 @@ export default function AuthScreen({ errorFromUrl }) {
         <div style={{ color: T.textMute, fontSize: 12, marginTop: 20, lineHeight: 1.5 }}>
           Pas encore client ?{' '}
           <a
-            href={import.meta.env.VITE_WP_SITE_URL}
+            href="https://torrea.fr/espace-membre/"
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: T.blue, textDecoration: 'none' }}
           >
-            Commander sur torrea.com
+            Créer votre compte sur Torrea.fr
           </a>
         </div>
       </div>
