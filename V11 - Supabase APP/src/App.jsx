@@ -1620,28 +1620,52 @@ function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose,
       ):(
         <>
           {/* Mode µm (ou moulin sélectionné) */}
-          <div style={{display:'flex',alignItems:'baseline',gap:12,justifyContent:'center',marginBottom:14,flexWrap:'wrap'}}>
-            <div style={{fontFamily:'monospace',fontSize:38,fontWeight:300,color:mc,textShadow:`0 0 24px ${mc}66`}}>
-              {grind}<span style={{fontSize:14,color:T.textDim,marginLeft:4}}>µm</span>
-            </div>
-            {clickVal!==null&&g&&g.clicks&&(
-              <div style={{fontFamily:'monospace',fontSize:18,color:T.gold,background:`${T.gold}18`,border:`1px solid ${T.gold}55`,borderRadius:5,padding:'4px 12px',fontWeight:700}}>
-                {g.unit} {clickVal}
+          {grinderId==='generic_classic'?(
+            <>
+              <div style={{display:'flex',alignItems:'baseline',gap:12,justifyContent:'center',marginBottom:14}}>
+                <div style={{fontFamily:'monospace',fontSize:38,fontWeight:300,color:mc,textShadow:`0 0 24px ${mc}66`}}>
+                  {clickVal??0}<span style={{fontSize:14,color:T.textDim,marginLeft:4}}>clics</span>
+                </div>
               </div>
-            )}
-          </div>
-          <GrindBar value={grind} method={method} grinder={g} onChange={setGrind} T={T}/>
-          <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'center',flexWrap:'wrap'}}>
-            <button onClick={()=>setGrind(g2=>clamp(g2-25,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>−25µm</button>
-            <button onClick={()=>setGrind(g2=>clamp(g2-5,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>−5µm</button>
-            <button onClick={()=>setGrind(m.grindBaseµm)} style={{padding:'8px 14px',border:`2px solid ${T.text}`,background:`${T.text}20`,color:T.text,borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'monospace',fontWeight:700,touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>↺ {m.grindBaseµm}µm</button>
-            <button onClick={()=>setGrind(g2=>clamp(g2+5,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>+5µm</button>
-            <button onClick={()=>setGrind(g2=>clamp(g2+25,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>+25µm</button>
-          </div>
-          <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:10,textAlign:'center'}}>
-            {g?`${g.minµm}–${g.maxµm}µm (plage moulin)`:'100–1400µm (référence universelle)'} · tap la barre pour saisir
-          </div>
-          <GrindHistoryMini history={history} currentGrind={grind} method={method} T={T}/>
+              <GrindBar value={grind} method={method} grinder={g} onChange={setGrind} T={T}/>
+              <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'center',flexWrap:'wrap'}}>
+                <button onClick={()=>setGrind(g2=>clamp(g2-50,g.minµm,g.maxµm))} style={dBtn(mc,T)}>−5 clics</button>
+                <button onClick={()=>setGrind(g2=>clamp(g2-10,g.minµm,g.maxµm))} style={dBtn(mc,T)}>−1 clic</button>
+                <button onClick={()=>setGrind(m.grindBaseµm)} style={{padding:'8px 14px',border:`2px solid ${T.text}`,background:`${T.text}20`,color:T.text,borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'monospace',fontWeight:700,touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>↺ reset</button>
+                <button onClick={()=>setGrind(g2=>clamp(g2+10,g.minµm,g.maxµm))} style={dBtn(mc,T)}>+1 clic</button>
+                <button onClick={()=>setGrind(g2=>clamp(g2+50,g.minµm,g.maxµm))} style={dBtn(mc,T)}>+5 clics</button>
+              </div>
+              <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:10,textAlign:'center'}}>
+                0–100 clics · plage générique · tap la barre pour saisir
+              </div>
+              <GrindHistoryMini history={history} currentGrind={grind} method={method} T={T}/>
+            </>
+          ):(
+            <>
+              <div style={{display:'flex',alignItems:'baseline',gap:12,justifyContent:'center',marginBottom:14,flexWrap:'wrap'}}>
+                <div style={{fontFamily:'monospace',fontSize:38,fontWeight:300,color:mc,textShadow:`0 0 24px ${mc}66`}}>
+                  {grind}<span style={{fontSize:14,color:T.textDim,marginLeft:4}}>µm</span>
+                </div>
+                {clickVal!==null&&g&&g.clicks&&(
+                  <div style={{fontFamily:'monospace',fontSize:18,color:T.gold,background:`${T.gold}18`,border:`1px solid ${T.gold}55`,borderRadius:5,padding:'4px 12px',fontWeight:700}}>
+                    {g.unit} {clickVal}
+                  </div>
+                )}
+              </div>
+              <GrindBar value={grind} method={method} grinder={g} onChange={setGrind} T={T}/>
+              <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'center',flexWrap:'wrap'}}>
+                <button onClick={()=>setGrind(g2=>clamp(g2-25,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>−25µm</button>
+                <button onClick={()=>setGrind(g2=>clamp(g2-5,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>−5µm</button>
+                <button onClick={()=>setGrind(m.grindBaseµm)} style={{padding:'8px 14px',border:`2px solid ${T.text}`,background:`${T.text}20`,color:T.text,borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'monospace',fontWeight:700,touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>↺ {m.grindBaseµm}µm</button>
+                <button onClick={()=>setGrind(g2=>clamp(g2+5,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>+5µm</button>
+                <button onClick={()=>setGrind(g2=>clamp(g2+25,g?g.minµm:100,g?g.maxµm:1400))} style={dBtn(mc,T)}>+25µm</button>
+              </div>
+              <div style={{fontFamily:'monospace',fontSize:10,color:T.textMute,marginTop:10,textAlign:'center'}}>
+                {g?`${g.minµm}–${g.maxµm}µm (plage moulin)`:'100–1400µm (référence universelle)'} · tap la barre pour saisir
+              </div>
+              <GrindHistoryMini history={history} currentGrind={grind} method={method} T={T}/>
+            </>
+          )}
         </>
       )}
     </div>
@@ -4855,10 +4879,11 @@ function TabBoutique({ T }) {
 function WelcomeModal({ onClose, T }) {
   const COACH_C='#9b6bff'
   const news = [
+    { icon:'🔐', title:'Connexion Torrea', accent:T.blue, desc:'L\'app nécessite désormais un compte Torrea.fr pour accéder à l\'outil de calibration — tes données sont sécurisées et synchronisées.' },
+    { icon:'⚙', title:'Moulin générique', accent:T.gold, desc:'Nouveau moulin "Autre / classique" dans le sélecteur : affiche directement les clics (0–100) sans valeur µm, pour tout moulin non répertorié.' },
     { icon:'🧠', title:'Coach IA', accent:COACH_C, desc:"Active le Coach dans le générateur : après chaque essai, dis ce que tu as goûté (acide, amer, fade…) → l'app ajuste mouture / temp / ratio selon les protocoles SCA." },
     { icon:'★',  title:'Favoris moulins & machines', accent:T.gold, desc:'Marque tes moulins et machines préférés d\'une étoile pour les retrouver instantanément en haut de la liste.' },
     { icon:'☕', title:'Fellow Aiden', accent:T.gold, desc:'Nouvelle méthode de brassage avec sélection automatique de profil expert (Washed Clarity, Natural Sweetness, Hybrid…) selon ton café.' },
-    { icon:'👾', title:'Coffee Invader élargi', accent:T.gold, desc:'L\'easter egg accessible avec n\'importe quelle machine. Mode swipe simplifié et plus réactif.' },
     { icon:'💾', title:'Recettes sauvegardées persistantes', accent:T.gold, desc:'Tes recettes sauvegardées sont visibles quelle que soit la méthode active.' },
   ]
   const features = [
@@ -4885,7 +4910,7 @@ function WelcomeModal({ onClose, T }) {
         <div style={{padding:'16px 20px 8px',background:`linear-gradient(180deg, ${COACH_C}0a 0%, transparent 100%)`}}>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
             <div style={{flex:1,height:1,background:`linear-gradient(90deg, transparent, ${COACH_C}66, transparent)`}}/>
-            <div style={{fontSize:10,letterSpacing:'0.3em',color:COACH_C,fontWeight:700,textTransform:'uppercase'}}>🆕 Nouveautés V10.2</div>
+            <div style={{fontSize:10,letterSpacing:'0.3em',color:COACH_C,fontWeight:700,textTransform:'uppercase'}}>🆕 Nouveautés V11</div>
             <div style={{flex:1,height:1,background:`linear-gradient(90deg, transparent, ${COACH_C}66, transparent)`}}/>
           </div>
           {news.map(f=>(
@@ -4939,8 +4964,9 @@ export default function App() {
   })
   const [darkMode,setDarkMode]=useState(true)
   const T=darkMode?DARK:LIGHT
-  const [showWelcome,setShowWelcome]=useState(true)
-  const closeWelcome=()=>{setShowWelcome(false)}
+  const WELCOME_KEY='TORREA_WELCOME_V11'
+  const [showWelcome,setShowWelcome]=useState(()=>!localStorage.getItem(WELCOME_KEY))
+  const closeWelcome=()=>{localStorage.setItem(WELCOME_KEY,'1');setShowWelcome(false)}
   const [mainTab,setMainTab]=useState('calibration')
   const [subTab,setSubTab]=useState('moulin')
   const [coffee,setCoffee]=useState({name:'',country:'',variety:'',profile:'',process:'',roastDate:''})
@@ -5067,6 +5093,19 @@ export default function App() {
               Déconnexion
             </button>
           </div>
+        </div>
+
+        {/* NOUVEAUTÉS */}
+        <div style={{marginBottom:10,display:'flex',justifyContent:'flex-start'}}>
+          <button onClick={()=>setShowWelcome(true)} style={{
+            display:'flex',alignItems:'center',gap:6,
+            padding:'5px 12px',
+            background:`${T.gold}12`,border:`1px solid ${T.gold}55`,borderRadius:20,
+            color:T.gold,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',fontWeight:700,
+            touchAction:'manipulation',WebkitTapHighlightColor:'transparent',
+          }}>
+            <span style={{fontSize:13}}>🆕</span> NOUVEAUTÉS
+          </button>
         </div>
 
         {/* NAV PRINCIPALE */}
