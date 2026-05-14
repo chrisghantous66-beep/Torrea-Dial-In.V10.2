@@ -637,6 +637,12 @@ CONSEILS
 • Attendez que le moulin soit chaud (2–3 shots) avant de dial-in
 • Notez vos recettes avec ✨ pour les retrouver dans l'historique
 
+☕ DIALIN PAR NIVEAU DE TORRÉFACTION (Torrea)
+Le point de départ de la mouture varie selon la torréfaction du café :
+• Light  → mouture plus fine (−10 à −20 µm vs référence). Température haute (93–96°C). L'acide sous-extrait vite : visez 27–32s pour espresso.
+• Medium → réglage de référence. Température 91–93°C. Ratio 1:2 standard. Point d'équilibre idéal pour commencer.
+• Dark   → mouture plus grossière (+10 à +20 µm vs référence). Température basse (88–91°C). Les composés amers s'extraient facilement : visez 20–26s pour espresso.
+
 🫘 EASTER EGG — COFFEE INVADER
 Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suffisent à la réveiller.
 Seras-tu capable de stopper l'invasion caféinée ? Bonne chance pour le retrouver…`
@@ -712,6 +718,12 @@ le temps, histogramme par méthode, top cafés par meilleur score.
 Depuis l'historique :
 • 📤 → QR code + lien à coller pour partager une recette
 • Sélectionne 2 shots → ⇄ Comparer A/B pour identifier le meilleur
+
+☕ DIALIN PAR NIVEAU DE TORRÉFACTION (Torrea)
+Le niveau de torréfaction change la stratégie d'extraction espresso :
+• Light  → température haute (93–95°C), pre-infusion longue (6–8s). Mouture légèrement plus fine. Visez 27–32s. Met en valeur l'acidité et la complexité fruitée.
+• Medium → température standard (91–93°C), pre-infusion 4–6s. Ratio 1:2 (18g → 36g). Point d'équilibre de référence pour commencer le dialin.
+• Dark   → température basse (88–91°C), pre-infusion courte (3–4s). Mouture légèrement plus grossière. Visez 20–26s. Évite les amertumes et révèle le corps chocolaté.
 
 🫘 EASTER EGG — COFFEE INVADER
 Une invasion caféinée se cache dans l'application. 7 tapes au bon endroit suffisent à la réveiller.
