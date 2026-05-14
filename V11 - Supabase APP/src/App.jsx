@@ -3005,11 +3005,13 @@ function CoffeeInvaders({ onClose, T }) {
           )}
         </div>
       )}
-      <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,textAlign:'center',letterSpacing:'0.1em'}}>
-        {controlMode === 'swipe' && status === 'playing'
-          ? '✋ Glisser pour bouger · 🫘 = tir auto on/off · ÉCHAP = quitter'
-          : '← → / A D · ESPACE = tirer · ÉCHAP = quitter'}
-      </div>
+      {status === 'playing' && (
+        <div style={{fontFamily:'monospace',fontSize:9,color:T.textMute,textAlign:'center',letterSpacing:'0.1em'}}>
+          {controlMode === 'swipe'
+            ? '✋ Glisser pour bouger · 🫘 = tir auto on/off · ÉCHAP = quitter'
+            : '← → / A D · ESPACE = tirer · ÉCHAP = quitter'}
+        </div>
+      )}
     </div>
   )
 }
