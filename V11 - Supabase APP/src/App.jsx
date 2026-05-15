@@ -173,6 +173,12 @@ function useFavorites(storageKey) {
   return {favs,toggle,isFav}
 }
 
+function useWindowWidth() {
+  const [w,setW]=useState(window.innerWidth)
+  useEffect(()=>{const h=()=>setW(window.innerWidth);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h)},[])
+  return w
+}
+
 // ─── CATALOGUE TORREA ─────────────────────────────────────────────────────────
 const COFFEE_CATALOG = [
   { name:'Capucas',  country:'Honduras',  variety:'', profile:'Chocolat, caramel, réglisse — gourmand et puissant', process:'Lavé', notes:'Riche, longue persistance · 1300–1800m · idéal espresso' },
@@ -1493,7 +1499,7 @@ function GrinderChartModal({ grinder, onClose, T }) {
 }
 
 // ─── TAB MOULIN ───────────────────────────────────────────────────────────────
-function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, notes, setNotes, portafilterType, setPortafilterType, T }) {
+function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, method, setMethod, grind, setGrind, grinderId, setGrinderId, notes, setNotes, portafilterType, setPortafilterType, T, isDesktop }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
   const [resetConfirm,setResetConfirm]=useState(false)
   const [grindValue,setGrindValue]=useState(0)
@@ -1551,7 +1557,12 @@ function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose,
     {showGuide&&<GuideModal mode="moulin" onClose={()=>setShowGuide(false)} T={T}/>}
     {liveWeightOpen&&<NumPad label="Poids en tasse" unit="g" initial={liveWeight>0?liveWeight:yld} min={0} max={500} onConfirm={w=>{setLiveWeight(w);setYld(w);setLiveWeightOpen(false)}} onClose={()=>setLiveWeightOpen(false)} T={T}/>}
     {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)} T={T}/>}
+    {showGrinderChart && g && <GrinderChartModal grinder={g} onClose={()=>setShowGrinderChart(false)} T={T}/>}
 
+    <div style={isDesktop?{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24,alignItems:'start'}:{}}>
+
+    {/* COLONNE GAUCHE : Setup */}
+    <div>
     {/* Boutons utilitaires */}
     <div style={{display:'flex',gap:8,marginBottom:16}}>
       <button onClick={()=>setShowGuide(true)} style={{flex:1,padding:'9px 0',background:T.bg3,border:`1px solid ${T.gold}66`,color:T.gold,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',touchAction:'manipulation'}}>📖 GUIDE</button>
@@ -1681,10 +1692,10 @@ function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose,
         </>
       )}
     </div>
+    </div>{/* fin colonne gauche */}
 
-    {/* Modal chart du moulin sélectionné */}
-    {showGrinderChart && g && <GrinderChartModal grinder={g} onClose={()=>setShowGrinderChart(false)} T={T}/>}
-
+    {/* COLONNE DROITE : Session */}
+    <div>
     {/* 6+8. ANALYSE D'EXTRACTION — timer + score fusionnés */}
     <div style={card(T)}>
       <div style={SL(T)}>Analyse d'extraction</div>
@@ -1803,6 +1814,8 @@ function TabMoulin({ coffee, setCoffee, onSave, onReset, history, dose, setDose,
         </div>
       }
     </div>
+    </div>{/* fin colonne droite */}
+    </div>{/* fin grid */}
   </>)
 }
 
@@ -3108,7 +3121,7 @@ function MachineSelector({ machineId, setMachineId, T }) {
 }
 
 // ─── TAB MACHINE ──────────────────────────────────────────────────────────────
-function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, notes, setNotes, portafilterType, setPortafilterType, T }) {
+function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, setYld, time, setTime, timerRunning, timerElapsed, timerStart, timerPause, timerReset, temp, setTemp, preInfPct, setPreInfPct, preInfSec, setPreInfSec, machineId, setMachineId, notes, setNotes, portafilterType, setPortafilterType, T, isDesktop }) {
   const [feedback,setFeedback]=useState(null),[flash,setFlash]=useState(null)
   const [resetConfirm,setResetConfirm]=useState(false)
   const [showGuide,setShowGuide]=useState(false)
@@ -3157,6 +3170,10 @@ function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, se
     {liveWeightOpen&&<NumPad label="Poids en tasse" unit="g" initial={liveWeight>0?liveWeight:yld} min={0} max={500} onConfirm={w=>{setLiveWeight(w);setYld(w);setLiveWeightOpen(false)}} onClose={()=>setLiveWeightOpen(false)} T={T}/>}
     {showInvaders&&<CoffeeInvaders onClose={()=>setShowInvaders(false)} T={T}/>}
 
+    <div style={isDesktop?{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24,alignItems:'start'}:{}}>
+
+    {/* COLONNE GAUCHE : Setup */}
+    <div>
     {/* Bouton guide */}
     <div style={{marginBottom:16}}>
       <button onClick={()=>setShowGuide(true)} style={{width:'100%',padding:'9px 0',background:T.bg3,border:`1px solid ${T.gold}66`,color:T.gold,borderRadius:6,cursor:'pointer',fontSize:11,letterSpacing:'0.15em',touchAction:'manipulation'}}>📖 GUIDE — MACHINE</button>
@@ -3170,6 +3187,10 @@ function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, se
     <MachineSelector machineId={machineId} setMachineId={setMachineId} T={T}/>
 
     <CoffeeCard coffee={coffee} setCoffee={setCoffee} T={T}/>
+    </div>{/* fin colonne gauche */}
+
+    {/* COLONNE DROITE : Session */}
+    <div>
     <TasteButtons flash={flash} onTaste={doTaste} feedback={feedback} T={T}/>
     <TastingNotes notes={notes} setNotes={setNotes} onSave={doSaveNotes} T={T}/>
 
@@ -3328,6 +3349,8 @@ function TabMachine({ coffee, setCoffee, onSave, onReset, dose, setDose, yld, se
         </div>
       }
     </div>
+    </div>{/* fin colonne droite */}
+    </div>{/* fin grid */}
   </>)
 }
 
@@ -4970,6 +4993,8 @@ function WelcomeModal({ onClose, T }) {
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
   const { session, logout } = useAuth()
+  const windowWidth = useWindowWidth()
+  const isDesktop = windowWidth >= 768
   const [urlError] = useState(() => {
     const e = new URLSearchParams(window.location.search).get('auth_error')
     if (e) window.history.replaceState({}, '', window.location.pathname)
@@ -5089,7 +5114,7 @@ export default function App() {
       {showWelcome&&<WelcomeModal onClose={closeWelcome} T={T}/>}
       <CaffeineBackground darkMode={darkMode}/>
 
-      <div style={{maxWidth:520,margin:'0 auto',padding:'0 16px 80px',position:'relative',zIndex:1}}>
+      <div style={{maxWidth:isDesktop?1080:520,margin:'0 auto',padding:isDesktop?'0 48px 80px':'0 16px 80px',position:'relative',zIndex:1}}>
 
         {/* HEADER */}
         <div style={{padding:'20px 0 14px',borderBottom:`1px solid ${T.border}`,marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -5124,7 +5149,7 @@ export default function App() {
         {/* NAV PRINCIPALE */}
         <div style={{display:'flex',flexWrap:'wrap',marginBottom:14,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden',boxShadow:`0 2px 8px ${T.shadow}`}}>
           {[['calibration','⬤ Calibration'],['history',`☰ Historique (${history.length})`],['analyse','📊 Analyse'],['recettes','☕ Recettes'],['comparateur','⇄ Comparer'],['boutique','🛒 Acheter']].map(([t,label])=>(
-            <button key={t} onClick={()=>setMainTab(t)} style={{flex:'1 1 33.33%',minWidth:0,padding:'12px 4px',fontFamily:'sans-serif',fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',background:mainTab===t?T.bg3:'transparent',color:mainTab===t?T.text:T.textMute,border:'none',cursor:'pointer',touchAction:'manipulation',transition:'all 0.2s',fontWeight:mainTab===t?700:400,borderBottom:mainTab===t?`2px solid ${T.gold}`:'2px solid transparent'}}>
+            <button key={t} onClick={()=>setMainTab(t)} style={{flex:isDesktop?'1':'1 1 33.33%',minWidth:0,padding:'12px 4px',fontFamily:'sans-serif',fontSize:isDesktop?12:11,letterSpacing:'0.1em',textTransform:'uppercase',background:mainTab===t?T.bg3:'transparent',color:mainTab===t?T.text:T.textMute,border:'none',cursor:'pointer',touchAction:'manipulation',transition:'all 0.2s',fontWeight:mainTab===t?700:400,borderBottom:mainTab===t?`2px solid ${T.gold}`:'2px solid transparent'}}>
               {label}
             </button>
           ))}
@@ -5141,10 +5166,10 @@ export default function App() {
 
         <div style={{display:mainTab==='calibration'?'block':'none'}}>
           <div style={{display:subTab==='moulin'?'block':'none'}}>
-            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} onReset={resetMoulin} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
+            <TabMoulin coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} onReset={resetMoulin} history={history} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} method={moulinMethod} setMethod={setMoulinMethod} grind={moulinGrind} setGrind={setMoulinGrind} grinderId={moulinGrinderId} setGrinderId={setMoulinGrinderId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T} isDesktop={isDesktop}/>
           </div>
           <div style={{display:subTab==='machine'?'block':'none'}}>
-            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} onReset={resetMachine} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T}/>
+            <TabMachine coffee={coffee} setCoffee={setCoffee} onSave={saveEntry} onReset={resetMachine} dose={dose} setDose={setDose} yld={yld} setYld={setYld} time={time} setTime={setTime} timerRunning={timerRunning} timerElapsed={timerElapsed} timerStart={timerStart} timerPause={timerPause} timerReset={timerReset} temp={machineTemp} setTemp={setMachineTemp} preInfPct={machinePreInfPct} setPreInfPct={setMachinePreInfPct} preInfSec={machinePreInfSec} setPreInfSec={setMachinePreInfSec} machineId={machineId} setMachineId={setMachineId} notes={notes} setNotes={setNotes} portafilterType={portafilterType} setPortafilterType={setPortafilterType} T={T} isDesktop={isDesktop}/>
           </div>
         </div>
         {mainTab==='history'&&<TabHistory history={history} onDelete={deleteEntries} onRate={rateEntry} onApply={applyRecipe} T={T}/>}
