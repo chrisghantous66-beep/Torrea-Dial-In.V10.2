@@ -3759,7 +3759,7 @@ function RecipeCard({recipe,T,grinder}){
       if(grinder.clicks){
         const raw=(µm-grinder.minµm)/(grinder.maxµm-grinder.minµm)*grinder.clicks
         const clics=grinder.unit==='rot'?Math.round(raw*10)/10:Math.round(raw)
-        convertedGrind=`${µm} µm · ${clics} ${grinder.unit}`
+        convertedGrind=`${clics} ${grinder.unit} (~${µm} µm)`
       } else {
         convertedGrind=`${µm} µm`
       }
@@ -4180,7 +4180,7 @@ function generateRecipe({methodId,coffee,roastId,profileIds,intensityId,grinderI
 
   const grinder=GRINDERS[grinderId]
   const native=grinder&&grinder.label!=='— Sélectionner un moulin —'?µmToSetting(grindµm,grinder):null
-  const grindLabel=native!==null?`${grindµm} µm (${native} ${grinder.unit})`:`${grindµm} µm`
+  const grindLabel=native!==null?`${native} ${grinder.unit} (~${grindµm} µm)`:`${grindµm} µm`
 
   return {
     id:`gen-${methodId}-${Date.now()}`,
