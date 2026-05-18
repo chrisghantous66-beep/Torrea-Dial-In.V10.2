@@ -3763,6 +3763,10 @@ function RecipeCard({recipe,T,grinder}){
       } else {
         convertedGrind=`${µm} µm`
       }
+    } else if(grinder.clicks){
+      const clicsClamped = µm > grinder.maxµm ? grinder.clicks : 1
+      const µmRef = µm > grinder.maxµm ? grinder.maxµm : grinder.minµm
+      convertedGrind=`${clicsClamped} ${grinder.unit} (~${µmRef} µm — réglage max)`
     } else {
       convertedGrind=`${µm} µm (hors plage)`
     }
